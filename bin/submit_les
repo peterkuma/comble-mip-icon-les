@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -ex
+
+if [ $# != 1 ]; then
+	echo "Run ICON LES for COMBLE cases.
+
+Usage: $0 expname
+
+Arguments:
+
+  expname  Experiment name.
+" >&2
+	exit 1
+fi
+
+expname=$1
+
+time=00:01:00
+nodes=1
+dir=runs/$expname
+
+. "exp/$expname"
+
+sbatch \
+	--account bb1311 \
+	--job-name=les_comble \
+	--partition=compute \
+	--nodes="$nodes" \
+	--threads-per-core=2 \
+	--output="$dir/output" \
+	--time "$time" \
+	--mem=250G \
+	--switch=1 \
+	bin/les "$expname"

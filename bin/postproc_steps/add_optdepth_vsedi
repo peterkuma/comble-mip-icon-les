@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+set -ex
+
+type_=$1
+expname=$2
+
+dir=opt_${type_}
+out=opt_$type_.nc
+dephy=dephy.nc
+
+cd "runs/$expname"
+
+# Extract time variable from mean file before adding optical_depth.
+ncks -O -v time "$dephy" time.nc
+
+do_opt=true
+if "$do_opt"; then
+	# Calculate ncells mean.
+	te=$(ds dim time mean.nc)
+	parallel --will-cite ncwa -O -a ncells "$dir/opt_2d_{}.nc" "$dir/opt_1d_{}.nc" \
+		::: $(seq 0 $(("$te" - 1)))
+
+	# Merge all optical depth time stamps.
+	files=$(for ((i=0;i<te;i++)); do echo "$dir/opt_1d_$i.nc"; done)
+	cdo -O mergetime $files "$out"
+
+	# Add od, odlc, clt to final mean file.
+	num_time=$(ds dim time "$out")
+	if [[ $num_time = $te ]]; then
+		ncks -A -v od,odlc,clt "$out" "$dephy"
+		ncks -A -v time time.nc "$dephy"
+	else
+		echo "only $num_time opt time steps included in $expname"
+	fi
+fi
+
+do_sedi=false
+if "$do_sedi"; then
+	# Merge all sedimentation time stamps.
+	files=$(for ((i=0;i<te;i++)); do echo "sedi/vm_sedi_final_$i.nc"; done)
+	cdo -O mergetime $files vm_sedi.nc
+
+	# Add od, odlc, clt to final mean file.
+	num_time=$(ds dim time vm_sedi.nc)
+	if [[ $num_time = $te ]]; then
+		ncks -A -v vmlc,vmlr,vmli,vmls,vmlg vm_sedi.nc "$dephy"
+		ncks -A -v time time.nc "$dephy"
+	else
+		echo "only $num_time sedi time steps included in $expname"
+	fi
+fi

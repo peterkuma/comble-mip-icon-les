@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+set -ex
+
+type_=$1
+expname=$2
+
+. "exp/$expname"
+
+cmd=$(realpath src/postproc/compute_optdepth)
+calc_z_ifc=$(realpath bin/calc_z_ifc)
+
+cd runs/${expname}
+
+dir=opt_${type_}
+
+mkdir -p "$dir"
+
+[[ $expname == *noice* ]] && l_ice=false || l_ice=true
+
+input="${type_}.nc"
+
+te=$(ds dim time "$input")
+
+p () {
+	parallel --will-cite "$@" ::: $(seq 0 $(("$te" - 1)))
+}
+
+if "$l_ice"; then
+	p ds select time z_ifc alt qr qc qi qg qs qnc qnr qni qng qns rho time: { {} } \
+		"$input" "$dir/input_{}.nc"
+	#p ncks -O -d "time,{}" -v z_ifc,qr,qc,qi,qg,qs,qnc,qnr,qni,qng,qns,rho \
+	#	"$input" "$dir/input_{}.nc"
+else
+	p ds select time z_ifc alt qr qc qnc qnr rho time: { {} } \
+		"$input" "$dir/input_{}.nc"
+	# p ncks -O -d "time,{}" -v z_ifc,qr,qc,qnc,qnr,rho \
+	# 	"$input" "$dir/input_{}.nc"
+fi
+
+if [[ ! $(ds ls z_ifc "$input") = z_ifc ]]; then
+	p "$calc_z_ifc" "$dir/input_{}.nc" "$dir/input_{}.nc"
+fi
+
+p "$cmd" \
+	"$dir/input_{}.nc" \
+	"$dir/odlc_{}.nc" \
+	"$dir/opt_{}.nc" \
+	"$dir/clt_{}.nc" \
+	".$l_ice."
+
+p ncks -A -v time "$dir/input_{}.nc" "$dir/opt_{}.nc"
+p ncks -A -v odlc "$dir/odlc_{}.nc" "$dir/opt_{}.nc"
+p ncks -A -v clt "$dir/clt_{}.nc" "$dir/opt_{}.nc"
+p cdo settime,0 "$dir/opt_{}.nc" "$dir/opt_2d_{}.nc"
+p ncks -A -v time "$dir/opt_{}.nc" "$dir/opt_2d_{}.nc"
+p ncatted -O -a long_name,odlc,o,c,"optical_depth_of_liquid_cloud" \
+	"$dir/opt_2d_{}.nc"
+p ncatted -O -a units,odlc,o,c,"1" "$dir/opt_2d_{}.nc"
+p ncatted -O -a long_name,od,o,c,"optical_depth" "$dir/opt_2d_{}.nc"
+p ncatted -O -a units,od,o,c,"1" "$dir/opt_2d_{}.nc"
+p ncatted -O -a long_name,clt,o,c,"cloud_area_fraction" \
+	"$dir/opt_2d_{}.nc"
+p ncatted -O -a units,clt,o,c,"1" "$dir/opt_2d_{}.nc"

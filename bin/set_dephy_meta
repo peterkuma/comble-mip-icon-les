@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -ex
+
+filename=$1
+
+authors='Anna Possner (apossner@iau.uni-frankfurt.de), Peter Kuma (kuma@iau.uni-frankfurt.de)'
+
+if [[ $filename == *noice* ]]; then
+	comment='ICON has an icosahedral grid. To imitate Lx25_dx100 as closely as possible, the model has been run with 182 grid points and a edge length (of an icosahedral triangle) with 141m=sqrt(2*100^2). The surface flux scheme was changed from the LES scheme set_scm_bnd to the ICON main scheme parturs due to very high moisture fluxes with set_scm_bnd.'
+else
+	comment='ICON has an icosahedral grid. To imitate Lx25_dx100 as closely as possible, the model has been run with 182 grid points and a edge length (of an icosahedral triangle) with 141m=sqrt(2*100^2). The surface flux scheme was changed from the LES scheme set_scm_bnd to the ICON main scheme parturs due to very high moisture fluxes with set_scm_bnd. The alpha space filling parameter was set to 0.68 in order the reduce the speed of riming.'
+fi
+
+if [[ $filename == *ProgNa* ]]; then
+	extra=(alt: "The simulation uses prescribed initial single-mode CCN profile (N_a = 105.5 cm-3, D_g = 0.14 um, sigma_g = 1.6 um, soluble fraction eta_s = 0.9, kappa not used) up to 10 km and exponentially decaying above. The CCN is depleted by cloud droplet formation during the simulation and relaxed back to the initial profile. No sea spray emissions are used. Default model INP is used.")
+else
+	extra=()
+fi
+
+ds set \
+	authors: "$authors" \
+	comment: "$comment" \
+	"${extra[@]}" \
+	"$filename" "$filename"
+
+ds rm none { history history_of_appended_files NCO } "$filename" "$filename"

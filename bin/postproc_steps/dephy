@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -ex
+
+type_=$1
+expname=$2
+
+rundir=runs/$expname
+
+bin/postproc_steps/icon2dephy \
+	mean \
+	input/comble_vars_mean.csv \
+	"$rundir/dephy_$type_.nc"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -ex
+
+type_=$1
+expname=$2
+
+dir=opt_${type_}
+
+cd "runs/$expname"
+
+# Extract time variable from mean file before adding optical_depth.
+ncks -O -v time dephy.nc time.nc
+
+#
+# Calculate ncells mean.
+#
+te=$(ds dim time mean.nc)
+for ((t=0; t<te; t++)); do
+	ncwa -O -a ncells "$dir/opt_2d_$t.nc" "$dir/opt_1d_$t.nc"
+done
+
+#
+# Merge all optical depth time stamps.
+#
+cdo -O mergetime "$dir/opt_1d_"*.nc "opt_$type_.nc"
+
+#
+# Add od, odlc, clt to final mean file.
+#
+num_time=$(ds dim time opt.nc)
+if  [[ $num_time = $te ]]; then
+	ncks -A -v od,odlc,clt opt.nc dephy.nc
+	ncks -A -v time time.nc dephy.nc
+else
+	echo "only $num_time opt time steps included in $expname"
+fi

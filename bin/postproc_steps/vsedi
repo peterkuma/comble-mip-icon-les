@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# Calculate mass-weighted sedimentation speeds and add to output file.
+#
+
+set -ex
+
+expname=$1
+
+. "exp/$expname"
+
+cmd=$(realpath src/postproc/compute_vsedi)
+
+cd runs/$expname
+
+mkdir -p sedi
+
+[[ $expname == *noice* ]] && l_ice=false || l_ice=true
+
+te=$(ds dim time hourly.nc)
+ze=$(ds dim alt hourly.nc)
+ncells=$(ds dim ncells hourly.nc)
+
+p () {
+	parallel --will-cite "$@" ::: $(seq 0 $(("$te" - 1)))
+}
+
+if "$l_ice"; then
+	p ncks -O -d time,{} -v qr,qc,qi,qg,qs,qnc,qnr,qni,qng,qns,rho \
+		hourly.nc sedi/sedi_speed_{}.nc
+else
+	p ncks -O -d time,{} -v qr,qc,qnc,qnr,rho \
+		hourly.nc sedi/sedi_speed_{}.nc
+fi
+
+p "$cmd" \
+	sedi/sedi_speed_{}.nc \
+	sedi/vm_c_{}.nc \
+	sedi/vm_r_{}.nc \
+	sedi/vm_i_{}.nc \
+	sedi/vm_s_{}.nc \
+	sedi/vm_g_{}.nc \
+	"$ze" "$ncells" ".$l_ice."
+
+#generate final file per time stamp and add attributes "long_name" and "units"
+p ncks -A -v time sedi/sedi_speed_{}.nc sedi/vm_c_{}.nc
+p ncks -A -v vmlr sedi/vm_r_{}.nc sedi/vm_c_{}.nc
+if "$l_ice"; then
+	p ncks -A -v vmli sedi/vm_i_{}.nc sedi/vm_c_{}.nc
+	p ncks -A -v vmls sedi/vm_s_{}.nc sedi/vm_c_{}.nc
+	p ncks -A -v vmlg sedi/vm_g_{}.nc sedi/vm_c_{}.nc
+fi
+p cdo settime,0 sedi/vm_c_{}.nc sedi/vm_sedi_final_{}.nc
+p ncks -A -v time sedi/vm_c_{}.nc sedi/vm_sedi_final_{}.nc
+p ncatted -O \
+	-a long_name,vmlc,o,c,mass_weighted_fall_speed_of_liquid_cloud_water \
+	sedi/vm_sedi_final_{}.nc
+p ncatted -O -a units,vmlc,o,c,"m\ s-1" sedi/vm_sedi_final_{}.nc
+p ncatted -O \
+	-a long_name,vmlr,o,c,mass_weighted_fall_speed_of_rain \
+	sedi/vm_sedi_final_{}.nc
+p ncatted -O -a units,vmlr,o,c,"m\ s-1" sedi/vm_sedi_final_{}.nc
+if "$l_ice"; then
+	p ncatted -O \
+		-a long_name,vmli,o,c,mass_weighted_fall_speed_of_ice_cloud \
+		sedi/vm_sedi_final_{}.nc
+	p ncatted -O -a units,vmli,o,c,"m\ s-1" sedi/vm_sedi_final_{}.nc
+	p ncatted -O -a long_name,vmls,o,c,mass_weighted_fall_speed_of_snow \
+		sedi/vm_sedi_final_{}.nc
+	p ncatted -O -a units,vmls,o,c,"m\ s-1" "sedi/vm_sedi_final_{}.nc"
+	p ncatted -O -a long_name,vmlg,o,c,mass_weighted_fall_speed_of_graupel \
+		sedi/vm_sedi_final_{}.nc
+	p ncatted -O -a units,vmlg,o,c,"m\ s-1" sedi/vm_sedi_final_{}.nc
+fi

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -ex
+
+module load python3/2023.01-gcc-11.2.0
+
+if [ $# != 1 ]; then
+	echo "Postprocess ICON LES for COMBLE cases.
+
+Usage: $0 expname
+
+Arguments:
+
+  expname  Experiment name.EX
+" >&2
+	exit 1
+fi
+
+expname=$1
+
+postproc_time=00:10:00
+postproc_mem=250G
+dir=runs/$expname
+
+. "exp/$expname"
+
+sbatch \
+	--account bb1311 \
+	--partition=compute \
+	--nodes=1 \
+	--job-name=postproc \
+	--time "$postproc_time" \
+	--mem "$postproc_mem" \
+	--output="$dir/postproc_output" \
+	bin/postproc "$expname"

@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+'''Plot time series of variables from an ICON LES simulation.
+
+Usage: plot_timeseries INPUT FORCING OUTPUT [TITLE]
+
+Arguments:
+
+  INPUT    Input DEPHY file (NetCDF).
+  FORCING  Forcing file (NetCDF).
+  OUTPUT   Output plot (PDF).
+  TITLE    Plot title.
+'''
+
+import sys
+import numpy as np
+import ds_format as ds
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import aquarius_time as aq
+
+NROW = 5
+COLORS = ['k', '#116eff', '#ff3918', '#24a100', '#666666', '#9c00db']
+MARKERS = [None, 's', 'o', 'D', 'v', '^']
+LINESTYLES = ['solid', 'dashed', 'dotted', 'dashdot']
+
+ALV = 2.5008e6 # Latent heat of vaporisation (ICON mo_physical_constants).
+
+mpl.rc('font', family='Open Sans')
+mpl.rc('axes', linewidth=0.3)
+#mpl.rc('axes', grid=True)
+mpl.rc('lines', linewidth=1.2)
+mpl.rc('xtick.major', width=0.3)
+mpl.rc('ytick.major', width=0.3)
+mpl.rc('legend', framealpha=1)
+mpl.rc('legend', facecolor='#eeeeee')
+mpl.rc('legend', edgecolor='none')
+mpl.rc('legend', fancybox=False)
+mpl.rc('legend', fontsize=7)
+mpl.rc('grid', color='k')
+mpl.rc('grid', alpha=0.2)
+mpl.rc('grid', lw=0.1)
+
+def integrate(x, zfull, rho):
+	dz = np.diff(zfull)
+	dz2 = zfull[-1] - zfull[0]
+	rho_s = np.mean(rho[:,:-1], axis=1)
+	return np.average(x[:,:-1]*rho[:,:-1], axis=1, weights=dz)*dz2/rho_s
+
+def nc(n, rhoa, qc, qr):
+	mask = qc + qr > 1e-6
+	x = n*rhoa
+	x[~mask] = np.nan
+	return np.nanmean(x, axis=1)
+
+def calc_wvp(d):
+	return integrate(d['qv'], d['zf'], d['rhoa']) \
+		if 'qv' in d and 'zf' in d and 'rhoa' in d else None
+
+def calc_twp(d):
+	return calc_wvp(d) + d['iwp'] + d['lwpc'] + d['lwpr'] \
+		if 'iwp' in d and 'lwpc' in d and 'lwpr' in d else None
+
+if __name__ == '__main__':
+	if len(sys.argv) not in (4, 5):
+		sys.stderr.write(sys.modules[__name__].__doc__)
+		sys.exit(1)
+
+	input_ = sys.argv[1]
+	forcing = sys.argv[2]
+	output = sys.argv[3]
+	title = sys.argv[4] if len(sys.argv) == 5 else None
+
+	d = ds.read(input_, jd=True)
+	d_f = ds.read(forcing, ['time', 'lon_ref', 'lat_ref'], jd=True)
+
+	time = d['time']
+	dt = (d['time'][1] - d['time'][0])*24*60*60
+	#t1 = d['time'][0]
+	#t2 = d['time'][-1]
+	t1 = aq.from_iso('2020-03-12T22:00:00')
+	t2 = aq.from_iso('2020-03-13T18:00:00')
+
+	zfull = d['zf']
+	rho = d['rhoa']
+
+	t1x = np.floor(t1 - 0.5) + 0.5
+	xticks = np.arange(t1x, t2 + 3/24, 3/24)
+	xticks = xticks[xticks >= t1]
+	xticklabels = [aq.to_datetime(tick).strftime('%H:%M') for tick in xticks]
+
+	def geo(t):
+		lat = np.interp(t, d_f['time'], d_f['lat_ref'])
+		lon = np.interp(t, d_f['time'], d_f['lon_ref'])
+		return '%.1f°N\n%.1f°E' % (lat, lon)
+
+	def plot_single(time, x, marker=None, color=None, **kwargs):
+		if marker is not None:
+			plt.scatter(xticks, [np.interp(xtick, time, x) for xtick in xticks],
+				marker=marker,
+				color=color,
+				s=10,
+			)
+		return plt.plot(time, x,
+			color=color,
+			marker=marker,
+			markevery=[],
+			markersize=3,
+			**kwargs
+		)[0]
+
+	xticklabels_geo = [geo(tick) for tick in xticks]
+
+	plt.figure(figsize=[6, 3*NROW])
+
+	plt.subplot(NROW, 1, 1)
+
+	def plot(
+		ldata, lticks, llabel,
+		rdata=None, rticks=None, rlabel=None,
+		lhline=None,
+		rhline=None,
+	):
+		lines = []
+		def plot_line(d):
+			if d[0] is None:
+				return
+			nonlocal lines
+			line = plot_single(time, d[0],
+				label=d[1],
+				color=COLORS[d[2]],
+				marker=MARKERS[d[3]],
+				linestyle=LINESTYLES[d[4]],
+			)
+			lines += [line]
+		def plot_side(data, ticks, label):
+			for d in data: plot_line(d)
+			plt.ylabel(label)
+			plt.ylim(ticks[0], ticks[1])
+			plt.yticks(np.arange(ticks[0], ticks[1] + ticks[2], ticks[2]))
+
+		plot_side(ldata, lticks, llabel)
+		plt.grid()
+
+		if lhline is not None:
+			plt.axhline(lhline, lw=0.5, color='k', linestyle='dashed')
+
+		if rdata is not None:
+			plt.gca().spines['left'].set_visible(False)
+			plt.twinx()
+			plot_side(rdata, rticks, rlabel)
+			color=COLORS[rdata[0][2]]
+			plt.gca().spines['right'].set_color(color)
+			plt.gca().tick_params(axis='y', colors=color)
+			plt.gca().yaxis.label.set_color(color)
+
+		if rhline is not None:
+			plt.axhline(rhline, lw=0.5, color='k', linestyle='dashed')
+
+		plt.xticks(xticks)
+		plt.gca().set_xticklabels(xticklabels)
+		plt.xlim(t1, t2)
+		leg = plt.legend(
+			lines,
+			[line.get_label() for line in lines],
+			loc='upper left',
+			handlelength=3
+		)
+		for l in leg.get_lines():
+			l.set_linewidth(1)
+
+	plot(
+		[
+			[d['lwpc']*1e3 if 'lwpc' in d else None,
+				'Cloud liquid water path', 2, 2, 0],
+			[d['iwp']*1e3 if 'iwp' in d else None,
+				'Total ice water path', 1, 1, 0],
+			[d['lwpr']*1e3 if 'lwpr' in d else None,
+				'Rain water path', 3, 3, 0],
+			[integrate(d['qis'], zfull, rho)*1e3 if 'qis' in d else None,
+				'Snow water path', 3, 3, 1],
+			[integrate(d['qig'], zfull, rho)*1e3 if 'qig' in d else None,
+				'Graupel water path', 3, 3, 2],
+		], [0, 2000, 500], 'Water path (g m$^{-2}$)',
+		[
+			[calc_twp(d), 'Total water path', 5, 5, 0],
+			[calc_wvp(d), 'Water vapor path', 5, 5, 1],
+		], [0, 8, 2], 'Water path (kg m$^{-2}$)',
+		#], [0, 100, 25], 'Cloud fraction (%)',
+	)
+	plt.gca().twiny()
+	plt.xlim(t1, t2)
+	plt.xticks(xticks)
+	plt.gca().set_xticklabels(xticklabels_geo)
+
+	plt.subplot(NROW, 1, 2)
+	plot(
+		[
+			[d['ta'][:,0] - 273.15 if 'ta' in d else None,
+				'10-m air temperature', 0, 0, 0],
+			[d['ts'] - 273.15 if 'ts' in d else None,
+				'Surface temperature', 1, 1, 0],
+		], [-30, 20, 10], 'Temperature (°C)',
+		[
+			[d['hur'][:,0]*1e2 if 'hur' in d else None,
+				'10-m relative humidity (RH; %)', 2, 2, 0],
+			[d['clt']*1e2 if 'clt' in d else None,
+				'Cloud fraction (CF)', 2, 2, 1],
+		], [50, 100, 10], 'RH & CF (%)',
+		lhline=[0],
+	)
+
+	plt.subplot(NROW, 1, 3)
+	plot(
+		[
+			[np.sqrt(d['ua'][:,0]**2 + d['va'][:,0]**2)
+				if 'ua' in d and 'va' in d else None,
+				'Total wind', 0, 0, 0],
+			[d['ua'][:,0] if 'ua' in d else None, 'Eastward wind', 1, 1, 0],
+			[d['va'][:,0] if 'va' in d else None, 'Northward wind', 2, 2, 0],
+		], [-30, 30, 10], '10-m wind speed (m$s^{-1}$)',
+		[
+			[d.get('od'), 'Optical depth', 3, 3, 0],
+			[d.get('odlc'), 'Optical depth liquid cloud', 3, 3, 1]
+		], [0, 120, 20], 'Optical depth',
+		lhline=0,
+	)
+
+	plt.subplot(NROW, 1, 4)
+	plot(
+		[
+			[nc(d['nic'], d['rhoa'], d['qlc'], d['qlr'])*1e-3
+				if all(x in d for x in ['nic', 'rhoa', 'qlc', 'qlr']) else None,
+				'Cloud ice crystal', 1, 1, 0],
+			[nc(d['nlr'], d['rhoa'], d['qlc'], d['qlr'])*1e-3
+				if all(x in d for x in ['nlr', 'rhoa', 'qlc', 'qlr']) else None,
+				'Rain droplet', 3, 3, 0],
+			[nc(d['nis'], d['rhoa'], d['qlc'], d['qlr'])*1e-3
+				if all(x in d for x in ['nis', 'rhoa', 'qlc', 'qlr']) else None,
+				'Snow crystal', 3, 4, 1],
+			[nc(d['nig'], d['rhoa'], d['qlc'], d['qlr'])*1e-3
+				if all(x in d for x in ['nig', 'rhoa', 'qlc', 'qlr']) else None,
+				'Graupel', 3, 5, 2],
+		], [0, 150, 25], 'Others # concentration (L$^{-1}$)',
+		[
+			[nc(d['nlc'], d['rhoa'], d['qlc'], d['qlr'])*1e-6
+				if all(x in d for x in ['nlc', 'rhoa', 'qlc', 'qlr']) else None,
+				'Cloud liquid droplet', 2, 2, 0],
+		], [0, 150, 25], 'Cloud liquid # concentration (cm$^{-3}$)',
+	)
+
+	plt.subplot(NROW, 1, 5)
+	plot(
+		[
+			[d.get('hfss'), 'Sensible heat flux', 1, 1, 0],
+			[d.get('hfls'), 'Latent heat flux', 2, 2, 0],
+
+		], [0, 1000, 250], 'Heat flux (Wm$^{-2}$)',
+		[
+			[np.cumsum(d['hfls']*dt/ALV) if 'hfls' in d else None,
+				'Int. mosture flux', 3, 3, 0],
+			[np.cumsum(d['hfls']/ALV - d['pr'])*dt
+				if 'hfls' in d and 'pr' in d else None,
+				'Int. total water flux', 3, 3, 1],
+			[np.cumsum(d['pr'])*dt if 'pr' in d else None,
+				'Int. total precipitation', 3, 3, 2],
+			[np.cumsum(d['pr'])*dt if 'pr' in d else None,
+				'Int. ice precipitation', 3, 3, 3],
+		], [0, 8, 2], 'Int. water flux (kg m$^{-2}$)',
+			#[d['pr']*1e3, 'Precipitation', 3, 3, 0],
+		#], [0, 0.4, 0.1], 'Precipitation flux (gm$^{-2}$s$^{-1}$)',
+	)
+
+#	plt.subplot(NROW, 1, 6)
+#	plot(
+#		[
+#			[integrate(d['dni_het'], zfull, rho), 'Het. freezing', 1, 1, 0],
+#			[integrate(d['dni_hom'], zfull, rho), 'Hom. freezing', 2, 2, 0],
+#			[integrate(d['dni_sip'], zfull, rho), 'Sec. ice', 3, 3, 0],
+#		], [0, 0.001, 0.0001], 'Ice # tendency (kg$^{-1}$ s$^{-1}$)',
+#	)
+
+	plt.xlabel('Time (UTC)')
+	plt.subplots_adjust(hspace=0.15)
+	if title is not None:
+		plt.suptitle(title, y=0.93)
+	plt.savefig(output, bbox_inches='tight', dpi=300)

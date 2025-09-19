@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+'''Plot a curtain (time x height) plot.
+
+Usage: plot_curtain INPUT OUTPUT [CELL]
+
+Arguments:
+
+  INPUT   Input DEPHY or ICON mean file (NetCDF).
+  OUTPUT  Output file (NetCDF).
+  CELL    Cell number.
+'''
+
+import sys
+from collections.abc import Iterable
+import numpy as np
+import ds_format as ds
+from rstool.algorithms import calc_w, calc_wsat, calc_hur
+import aquarius_time as aq
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.colors import ListedColormap
+from matplotlib.gridspec import GridSpec
+
+mpl.rc('font', family='Open Sans')
+mpl.rc('axes', linewidth=0.3)
+#mpl.rc('axes', grid=True)
+mpl.rc('lines', linewidth=1.2)
+mpl.rc('xtick.major', width=0.3)
+mpl.rc('ytick.major', width=0.3)
+mpl.rc('legend', framealpha=1)
+mpl.rc('legend', facecolor='#eeeeee')
+mpl.rc('legend', edgecolor='none')
+mpl.rc('legend', fancybox=False)
+mpl.rc('legend', fontsize=7)
+mpl.rc('grid', color='k')
+mpl.rc('grid', alpha=0.2)
+mpl.rc('grid', lw=0.1)
+
+def transparent(cmap):
+	if isinstance(cmap, str):
+		cmap = plt.get_cmap(cmap)
+	colors = cmap(np.linspace(0, 1, 256))
+	colors[:, -1] = np.linspace(0, 1, 256)
+	return ListedColormap(colors)
+
+NROW = 5
+NCOLORBARS = 3
+COLORS = ['k', '#116eff', '#ff3918', '#24a100', '#666666']
+LINESTYLES = ['solid', 'dashed', 'dotted', 'dashdot']
+CMAPS = [
+	'viridis',
+	transparent('Blues'),
+	transparent('Reds'),
+	transparent('Greens')
+]
+
+VARS_DEPHY = {
+	'time': 'time',
+	'zf': 'zfull',
+	'ta': 'ta',
+	'qlc': 'qlc',
+	'qic': 'qic',
+	'theta': 'theta',
+	'qlr': 'qlr',
+	'qis': 'qis',
+	'qig': 'qig',
+	'hur': 'hur',
+}
+
+VARS_ICON = {
+	'time': 'time',
+	'temp': 'ta',
+	'qc': 'qlc',
+	'qi': 'qic',
+	'qr': 'qlr',
+	'qs': 'qis',
+	'qg': 'qig',
+	'pres': 'pfull',
+	'z_mc': 'zfull',
+	'qv': 'hus',
+	'pres': 'pfull',
+}
+
+ZHALF = np.arange(0, 7000 + 10, 10)
+ZFULL = 0.5*(ZHALF[1:] + ZHALF[:-1])
+
+R = 287.05
+Cp = 1005
+p0 = 1e5
+
+def set_over(cmap):
+	c = plt.get_cmap(cmap, 256)
+	last = c(255)
+	new_cmap = c.copy()
+	new_cmap.set_over(last)
+	return new_cmap
+
+def read(filename, cell):
+	d = ds.read(filename, [], full=True)
+	if ds.attr(d, 'reference') == \
+		'https://github.com/ARM-Development/comble-mip':
+		return read_dephy(filename, cell)
+	else:
+		return read_icon(filename, cell)
+
+def read_dephy(filename, cell):
+	assert cell == None
+	d = ds.read(filename, list(VARS_DEPHY.keys()), jd=True)
+	for k, v in VARS_DEPHY.items():
+		ds.rename(d, k, v)
+	d['hur'] *= 100
+	return d
+
+def interp(x, zfull, zfull2):
+	shape2 = list(x.shape)
+	shape2[1] = len(zfull2)
+	x2 = np.full(shape2, np.nan)
+	for i in range(x.shape[0]):
+		for j in range(x.shape[2]):
+			order = np.argsort(zfull[:,j])
+			x2[i,:,j] = np.interp(zfull2, zfull[order,j], x[i,order,j])
+	return x2
+
+def read_icon(filename, cell):
+	sel = {'ncells': [cell]} if cell is not None else None
+	d = ds.read(filename, list(VARS_ICON.keys()), jd=True, sel=sel)
+	for k, v in VARS_ICON.items():
+		ds.rename(d, k, v)
+	if 'ta' in d and 'pfull' in d:
+		d['theta'] = d['ta']*(p0/d['pfull'])**(R/Cp)
+	for var in ds.vars(d):
+		if d[var].ndim == 3:
+			d[var] = interp(d[var], d['zfull'], ZFULL)
+			if cell is not None: assert(d[var].shape[2] == 1)
+			d[var] = np.mean(d[var], axis=2)
+	d['zfull'] = ZFULL
+	if 'hus' in d and 'ta' in d and 'pfull' in d:
+		d['hur'] = calc_hur(
+				w=calc_w(hus=d['hus']),
+				wsat=calc_wsat(p=d['pfull'], ta=d['ta'])
+		)
+	if 'pfull' in d:
+		del d['pfull']
+	return d
+
+def interp2d(x, h, h2):
+	x2 = np.ma.empty((x.shape[0], len(h2)))
+	for i in range(x.shape[0]):
+		x2[i,:] = np.interp(h2, h, x[i,:])
+	try: x2.mask = x.mask
+	except AttributeError: pass
+	return x2
+
+if __name__ == '__main__':
+	if len(sys.argv) not in (3, 4):
+		sys.stderr.write(sys.modules[__name__].__doc__)
+		sys.exit(1)
+	input_ = sys.argv[1]
+	output = sys.argv[2]
+	cell = int(sys.argv[3]) if len(sys.argv) == 4 else None
+
+	cmaps = [set_over(cmap) for cmap in CMAPS]
+
+	d = read(input_, cell)
+	time = d['time']
+	zfull = d['zfull']
+
+	t1 = aq.from_iso('2020-03-12T22:00:00')
+	t2 = aq.from_iso('2020-03-13T18:00:00')
+
+	t1x = np.floor(t1 - 0.5) + 0.5
+	xticks = np.arange(t1x, t2 + 3/24, 3/24)
+	xticks = xticks[xticks >= t1]
+	xticklabels = [aq.to_datetime(tick).strftime('%H:%M') for tick in xticks]
+
+	fig = plt.figure(figsize=[8, 3*NROW])
+	gs = GridSpec(NROW, 1 + NCOLORBARS*2,
+		width_ratios=([30, 0.5] + [1, 4]*NCOLORBARS)[:-1],
+		wspace=0,
+	)
+
+	def plot(data, caxs=None):
+		lines = []
+		labels = []
+		h = zfull*1e-3
+		j = 0
+		plot_legend = False
+		has_plot = False
+		for i, d in enumerate(data):
+			type_, x, label, range_, color_idx, linestyle_idx, over = d
+			if x is None: continue
+			has_plot = True
+			if type_ == 'l': plot_legend = True
+			levels_hd = np.arange(range_[0], range_[1] + range_[2]/4, range_[2]/4)
+			levels_ld = np.arange(range_[0], range_[1] + range_[2], range_[2])
+			if d[0] == 'f':
+				cmap = cmaps[color_idx]
+				# cf = plt.contourf(time, h, x.T,
+				# 	cmap=cmap,
+				# 	levels=levels_hd,
+				# 	extend=('max' if over else None),
+				# )
+				h2 = np.arange(0, 7, 1e-2)
+				x2 = interp2d(x, h, h2)
+				ex = [time[0], time[-1], h2[0], h2[-1]]
+				im = plt.imshow(x2.T,
+					cmap=cmap,
+					vmin=range_[0],
+					vmax=range_[1],
+					extent=ex,
+					origin='lower'
+				)
+				plt.gca().set_aspect('auto')
+				ax = plt.gca()
+				cax = fig.add_subplot(caxs[j])
+				cb = fig.colorbar(im, label=d[2], cax=cax)
+				cb.set_ticks(levels_ld)
+				plt.sca(ax)
+				j += 1
+			else:
+				color = COLORS[color_idx]
+				linestyle = LINESTYLES[linestyle_idx]
+				c = plt.contour(time, h, x.T,
+					linewidths=0.5,
+					colors=color,
+					linestyles=linestyle,
+					levels=levels_ld,
+				)
+				lines += [Line2D([0], [0], color=color, linestyle=linestyle)]
+				labels += [label]
+		if has_plot:
+			plt.ylim(0, 7)
+			plt.yticks(np.arange(0, 8, 1))
+			plt.ylabel('Height (km)')
+			plt.xticks(xticks)
+			plt.gca().set_xticklabels(xticklabels)
+			plt.xlim(t1, t2)
+			if plot_legend:
+				plt.legend(lines, labels, loc='upper left')
+
+	def caxs(i):
+		return [gs[i,2+2*j] for j in range(NCOLORBARS)]
+
+	i = 0
+
+	fig.add_subplot(gs[i,0])
+	z = d['ta'] - 273.15 if 'ta' in d else None
+	plot(
+		[
+			['f', z, 'Temperature (°C)', [-70, 0, 10], 0, 0, False],
+			['l', d['qlc']*1e6 if 'qlc' in d else None, \
+				'Cloud liquid', [0, 500, 10], 2, 0, False],
+			['l', d['qic']*1e6 if 'qic' in d else None, \
+				'Cloud ice', [0, 500, 10], 1, 0, False],
+			#['l', d['qlr'], 'Rain', 3, 0],
+			#['l', d['qis'], 'Snow', 3, 1],
+			#['l', d['qig'], 'Graupel', 3, 2],
+		],
+		caxs=caxs(i),
+	)
+	if z is not None:
+		plt.contour(time, zfull*1e-3, z.T if z is not None else None,
+			levels=[-30, 0],
+			colors='red',
+			linestyles='dashed'
+		)
+#	plt.legend(
+#		[Line2D([0], [0], color='red', linestyle='dashed')],
+#		['Hom. freezing'],
+#		loc='upper left',
+#	)
+
+	i += 1
+	fig.add_subplot(gs[i, 0])
+	plot(
+		[
+			['f', d['theta'] - 273.15 if 'theta' in d else None, \
+				'Potential temperature (°C)', [-30, 20, 5], 0, 0, False],
+		],
+		caxs=caxs(i),
+	)
+
+	i += 1
+	fig.add_subplot(gs[i, 0])
+	plot(
+		[
+			['f', d['hur'] if 'hur' in d else None, \
+				'Relative humidity (%)', [0, 100, 10], 0, 0, False],
+		],
+		caxs=caxs(i),
+	)
+
+	i += 1
+	fig.add_subplot(gs[i, 0])
+	plot(
+		[
+			['f', d['qlc']*1e6 if 'qlc' in d else None, \
+				'Cloud liquid (mg kg$^{-1}$)', [0, 200, 20], 2, 0, True],
+			['f', d['qic']*1e6 if 'qic' in d else None, \
+				'Cloud ice (mg kg$^{-1}$)', [0, 200, 20], 1, 0, True],
+		],
+		caxs=caxs(i),
+	)
+
+	i += 1
+	fig.add_subplot(gs[i, 0])
+	plot(
+		[
+			['f', d['qlr']*1e6 if 'qlr' in d else None, \
+				'Rain (mg kg$^{-1}$)', [0, 200, 20], 2, 0, True],
+			['f', d['qis']*1e6 if 'qis' in d else None, \
+				'Snow (mg kg$^{-1}$)', [0, 200, 20], 1, 0, True],
+			['f', d['qig']*1e6 if 'qig' in d else None, \
+				'Graupel (mg kg$^{-1}$)', [0, 200, 20], 3, 0, True],
+		],
+		caxs=caxs(i),
+	)
+
+	plt.xlabel('Time (UTC)')
+
+	plt.savefig(output, bbox_inches='tight')
