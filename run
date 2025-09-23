@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -e
+
+mkdir -p ~/.parallel
+touch ~/.parallel/will-cite
+
+njobs=24
+
+while getopts "f" opt; do
+    case $opt in
+        f) force=1 ;;
+    esac
+done
+shift $((OPTIND-1))
+
+cmd="$1"
+
+tmp=$(mktemp)
+tmp_final=$(mktemp)
+trap 'rm -- "$tmp" "$tmp_final"' EXIT
+
+cmd () {
+	echo $* >> "$tmp"
+}
+
+run () {
+	parallel -tuj "$njobs" < "$tmp"
+	echo > "$tmp"
+}
+
+newer () {
+	[[ $force = 1 ]] && return 1
+	local tdst=0
+	local f
+	for f in "${dst[@]}"; do
+		[[ ! -e $f ]] && continue
+		local mtime=$(("$(date -r "$f" +%s)"*1000000000 + "10#$(date -r "$f" +%N)"))
+		[[ $tdst = 0 || $mtime < $tdst ]] && tdst=$mtime
+	done
+	local tsrc=0
+	for f in "${src[@]}"; do
+		[[ ! -e $f ]] && continue
+		local mtime=$(("$(date -r "$f" +%s)"*1000000000 + "10#$(date -r "$f" +%N)"))
+		[[ $tsrc = 0 || $mtime > $tsrc ]] && tsrc=$mtime
+	done
+	[[ $tdst != 0 && ( $tsrc = 0 || $tdst > $tsrc ) ]]
+}
+
+case "$cmd" in
+
+plot_runs)
+    for r in runs/*; do
+        x=
+        if [[ -e $r/dephy_mean.nc ]]; then
+            x=$r/dephy_mean.nc
+        elif [[ -e $r/dephy.nc ]]; then
+            x=$r/dephy.nc
+        elif [[ -e $r/mean.nc ]]; then
+            x=$r/mean.nc
+        fi
+        if [[ -n $x ]]; then
+            src=$x
+            dst=$r/curtain.pdf
+            newer || cmd bin/plot_curtain $src $dst
+            src=($x $r/init_SCM.nc)
+            dst=$r/timeseries.pdf
+            newer || cmd bin/plot_timeseries ${src[@]} $dst
+        fi
+        if [[ -e $r/dephy_2d.nc ]]; then
+            src=($r/dephy_2d.nc $r/init_SCM.nc $r/grid.nc)
+            dist=$r/2d.pdf
+            newer || cmd bin/plot_2d \
+                $r/dephy_2d.nc $r/init_SCM.nc $r/grid.nc 120 $dst
+        fi
+    done
+    ;;
+
+plot_mip)
+    for f in arm-comble-mip/output_les/*/{sandbox,staged}/*.nc; do
+        src=$f
+        name=$(basename "${f%.nc}")
+        dir=$(dirname "$f")
+        dst=$dir/curtain_$name.pdf
+        newer || cmd bin/plot_curtain $src $dst
+        src=($f input/COMBLE_INTERCOMPARISON_FORCING_V2.5.nc)
+        dst=$dir/timeseries_$name.pdf
+        newer || cmd bin/plot_timeseries ${src[@]} $dst
+    done
+    ;;
+
+*)
+    cat <<EOF
+Usage: $0 [-f] COMMAND
+
+Available commands:
+
+  plot_runs  Plot timeseries and curtain of all runs under runs.
+  plot_mip   Plot timeseries and curtain of all models under arm-comble-mip/les_output.
+
+Options:
+
+  -f  Force processing even if the target is newer than the sources.
+EOF
+    exit 1
+
+esac
+
+run
