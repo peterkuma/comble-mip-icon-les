@@ -1,0 +1,5 @@
+. exp/FixN
+
+iicephase=0
+mean_ml_varlist="'pres_sfc','t_g','umfl_s','vmfl_s','lhfl_s','shfl_s','tvm','tvh','drag_u_grid','drag_v_grid','tqc','qr','z_ifc','rho','tot_prec_rate','ice_gsp_rate','snow_gsp_rate','graupel_gsp_rate','thu_s','thb_s','thb_t','sob_s','pres','u','v','temp','rho','qv','tke','qc','qr','z_mc','z_ifc','qnc', 'qnr','qi'"
+hourly_hl_varlist="'pres','u','v','w','rho','temp','qv','rh','tke','qc','qr','qnc','qnr'"

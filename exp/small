@@ -1,0 +1,6 @@
+. default
+
+nodes=2
+time=00:40:00
+postproc_time=00:05:00
+grid_name=Torus_Triangles_10x10_100m

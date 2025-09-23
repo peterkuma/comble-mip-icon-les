@@ -1,0 +1,4 @@
+. exp/FixN_small
+
+icondir=src/ICON_DWD_NWP_DEPHY/FixN_def_z0
+const_z0=0.001 # This also needs to be set in the source code.

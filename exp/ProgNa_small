@@ -1,0 +1,6 @@
+. exp/ProgNa
+
+nodes=2
+grid_name=Torus_Triangles_10x10_100m
+time=00:40:00
+postproc_time=00:05:00
