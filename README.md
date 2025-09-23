@@ -32,17 +32,17 @@ simulation output.
 `/home/b/b380903/postproc/COMBLE`: Postprocessing.
 
 This repository inherits from the above, but the process is more consolidated,
-various fixed have been applied to the ICON source code (Section "ICON source
+various fixes have been applied to the ICON source code (Section "ICON source
 code"), and 2D DEPHY output has been added. This repository largely inherits
-from and supersedes Anna's files, but there may be some useful parts which are
+from and supersedes Anna's files, but there may be some useful parts that are
 under Anna's files but not here.
 
 ## Code repository
 
-This directory is a Git repository, but not all of the files are commited to the
+This directory is a Git repository, but not all of the files are committed to the
 Git history, because the remaining files are either too large or not suitable to
-be commited. Notably, scripts under `bin`, postprocessing code under `src`, and
-experiment configuration under `exp` are commited, while the model output under
+be committed. Notably, scripts under `bin`, postprocessing code under `src`, and
+experiment configuration under `exp` are committed, while the model output under
 `runs` and `submission` is not, nor are ICON repositories under
 `src/ICON_DWD_NWP_DEPHY` and the COMBLE MIP repository under `arm-comble-mip`.
 
@@ -67,7 +67,7 @@ submission to COMBLE MIP:
 - `FixN_as0.68`: The **FixN** experiment. This sets the `alpha_spacefilling`
   parameter to 0.68 to reduce graupel formation.
 - `FixN_noice`: The **FixN noice** experiment. The `alpha_spacefilling`
-  parameters does not need to be set (no graupel).
+  parameter does not need to be set (no graupel).
 - `ProgNa_as0.68`: The **ProgNa** experiment.
 
 The experiment configuration files are shell scripts included by the `bin/les`
@@ -80,21 +80,29 @@ a small "toy" domain in the context of the COMBLE MIP manuscript.
 
 ## ICON model input and output
 
+The model experiment run directories are stored in `runs` and under
+`runs_work`. The former is on the scratch partition and subject to old file
+removal policies on Levante but is faster for reading and writing data.
+`runs_work` is a copy of `runs` on the work partition (project bb1311) made with
+rsync. This is permanent (as long as the project exists) but slower. After
+changes in `runs`, rsync should be run in due time (within several weeks) to
+ensure that the output is preserved: `rsync -av runs/ runs_work/`.
+
 ICON is configured to output three NetCDF files: `mean.nc`, `hourly.nc`, and
 `inst.nc`. `mean.nc` is 10-min means, `hourly.nc` is hourly instantaneous, and
 `inst.nc` is 10-min instantaneous. The exact output configuration is in
-`bin/les`. Two ICON namelists `icon_master.namelist` and `icon.namelist`
-containing the run configuration are created by `bin/les` in the experiment's
+`bin/les`. Two ICON namelists, `icon_master.namelist` and `icon.namelist`,
+containing the run configuration, are created by `bin/les` in the experiment's
 run directory. Other ICON input files are symlinked in the run directory.
 Notably, the grids are located in `input/Torus_Triangles_`\*, and the LES
 forcing file is `input/COMBLE_INTERCOMPARISON_FORCING_V2.5.nc`. These are
 symlinked in the experiment's run directory as `grid.nc` and `init_SCM.nc`,
 respectively. The job's standard and error output are stored in `output`, and
-for the postprocessing job in `postproc_output`.
+for the postprocessing job, in `postproc_output`.
 
 ## Postprocessing
 
-The postprocessing involve calculation of optical depth by
+The postprocessing involves calculation of optical depth by
 `bin/postproc_steps/optdepth` and conversion of the model output to the DEPHY
 format by `bin/postproc_steps/dephy`, as required by the COMBLE MIP. The optical
 depth calculation creates files `opt_mean.nc` and `opt_inst.nc` in the
@@ -106,8 +114,8 @@ steps also can be run interactively from the command line in an SSH session
 started with `salloc -A bb1311 -p interactive -t 8:00:00 --mem=8G` or similar.
 
 The Fortran postprocessing source code is located under `src/postproc`. It can
-be complied with `make` (run in the same directory as the code), and requires
-the gcc module to be loaded `module load gcc` beforehand.
+be compiled with `make` (run in the same directory as the code) and requires
+the gcc module to be loaded with `module load gcc` beforehand.
 
 The postprocessing steps `add_optdepth`, `add_optdepth_vsedi`, and `vsedi`
 are currently not applied by `bin/postproc`. The work done by `add_optdepth`
@@ -117,18 +125,18 @@ is now done by `dephy`. I don't know if vsedi will be needed in the future.
 
 The experiments can be submitted with `bin/submit_les` *exp*, where *exp* is the
 experiment name, as defined in the `exp` directory. At the end of the run, a
-postprocessing job is submitted automatically. It can be also submitted manually
+postprocessing job is submitted automatically. It can also be submitted manually
 with `bin/submit_postproc` *exp*. The model and postprocessing can also be run
 in the current interactive session with `bin/les` *exp* and `bin/postproc`
 *exp*. The individual postprocessing steps are implemented in scripts under
 `bin/postproc_steps`, and these can also be run individually in an interactive
-session.. The programs under `bin` should be always run from the main repository
+session. The programs under `bin` should always be run from the main repository
 directory as the current work directory.
 
 ## Plotting
 
 Some plotting scripts are under `bin`. They can be run for all run results in
-`runs` with `./run plot_runs`, and for all the MIP models under `mip/output_les`
+`runs` with `./run plot_runs` and for all the MIP models under `mip/output_les`
 with `./run plot_mip`. The following plotting scripts are available:
 
 - `plot_2d`: Plot 2D surface fields from DEPHY 2D files or directly from the
@@ -141,7 +149,7 @@ with `./run plot_mip`. The following plotting scripts are available:
 - `plot_timeseries`: Plot time series plots from the DEPHY mean files or
   `mean.nc`.
 
-The plotting script as the `run` script should always be executed from the main
+The plotting script and the `run` script should always be executed from the main
 repository directory as the current working directory.
 
 ## Input files
@@ -164,22 +172,22 @@ Some ancillary input files are stored under `input`:
 
 The ICON model source code is located under `src/ICON_DWD_NWP_DEPHY`. Each
 of the main experiments has its own branch in its own subdirectory. The
-directory `src/ICON_DWD_NWP_DEPHY/bare` is a bare git repository which is
+directory `src/ICON_DWD_NWP_DEPHY/bare` is a bare Git repository that is
 shared for all of them and can be pushed into with `git push origin` *branch*
 from each of the experiment ICON source code subdirectories.
 
-- `bare`: Git "bare" repository in which are of the branches for the experiments
-  are stored by `git push`, from the repositories listed below.
+- `bare`: Git "bare" repository in which all of the branches for the experiments
+  are stored by `git push` from the repositories listed below.
 - `baseline`: Baseline for all of the experiments. This inherits from the
   `icon-nwp-scm` branch of the [main ICON
   repository](https://gitlab.dkrz.de/icon/icon-nwp) and adds a fix for surface
-  flux calcuation (commit b8e5168), use of `parturs` instead of `set_scm_bnd`
+  flux calculation (commit b8e5168), use of `parturs` instead of `set_scm_bnd`
   for surface flux calculations (commit 576ab88), and changes required for the
   COMBLE forcing and vertical grid (commits dd6819 and c76eac).
 - `baseline_fix_z0`: This inherits from `baseline` but also adds fixed surface
   roughness `z0h` (commit 446139).
 - `FixN`: Repository for the FixN experiment. This is based on `baseline_fix_z0`
-  and adds fixed hydrometeor number concentration (commit 86c788) and turns of
+  and adds fixed hydrometeor number concentration (commit 86c788) and turns off
   ice multiplication (commit 108088). The latter makes little difference, but
   secondary ice production (SIP) is supposed to be off for FixN.
 - `FixN_def_z0`: The same as above, but for the default z0 experiment, which
@@ -188,7 +196,7 @@ from each of the experiment ICON source code subdirectories.
 - `icon-nwp-scm`: The original branch of the same name from [ICON
   GitLab](icon-nwp-scm).
 - `ProgNa`: The ProgNa experiment. This is based on `baseline_fix_z0` and also
-  sets initial aerosol parameters required for this expermiment (commit a1d21a).
+  sets initial aerosol parameters required for this experiment (commit a1d21a).
   TODO: This needs some more attention before it complies with the COMBLE MIP
   requirements for the experiment.
 - `ProgNaNi`: The same as above, but for the ProgNaNi experiment. TODO: This
@@ -201,8 +209,8 @@ The `submission` directory contains the final ICON model output files as
 submitted to COMBLE MIP. They are the same as the corresponding `dephy.nc` files
 under `runs`, except that they also contain modified metadata set with
 `bin/set_dephy_meta`. The current version of `bin/postproc_steps/dephy` now sets
-the metadata correctly and `bin/set_dephy_meta` does not need to be applied. The
-files under `submission` have been commited to the [COMBLE MIP GitHub
+the metadata correctly, and `bin/set_dephy_meta` does not need to be applied. The
+files under `submission` have been committed to the [COMBLE MIP GitHub
 repository](https://github.com/ARM-Development/comble-mip/).
 
 ## TODO
@@ -210,7 +218,7 @@ repository](https://github.com/ARM-Development/comble-mip/).
 As of 23 Sep 2025, there is an ongoing discussion with [Gaurav
 Dogra](mailto:gaurav.dogra@ipsl.fr) and [Tomi
 Raatikainen](Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
-simulations for COMBLE MIP. The should be using their respective models for the
+simulations for COMBLE MIP. They should be using their respective models for the
 simulation.
 
 Anna has wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
@@ -218,19 +226,19 @@ experiments. The code is supposedly somewhere in the same directory as FixN in
 Anna's COMBLE MIP files.
 
 The **ProgNa** and **ProgNaNi** may also need some additional work and checks
-before submitting to COMBLE MIP, regarding how diagnostic and prognostic ice
+before submitting to COMBLE MIP regarding how diagnostic and prognostic ice
 should be specified.
 
 The SIP experiments should be conducted with the SIP implementation as in the
 [ICON MICRO](https://github.com/apossner/ICON_MICRO) repository produced by Anna
 and Kevin Pfannkuch. [Another version](https://github.com/peterkuma/ICON_MICRO)
-of the repository exists which also includes the whole Git history of ICON as on
+of the repository exists, which also includes the whole Git history of ICON as on
 the DKRZ GitLab. Both of these repositories are private and require an invite.
 Contact [Peter Kuma](mailto:peter@peterkuma.net) or Anna.
 
 ## Other stuff
 
-`src/grid-generator` is a grid generator which can produce torus grids. This is
+`src/grid-generator` is a grid generator that can produce torus grids. This is
 not needed unless grids other than `input/Torus_Triangles_*.nc` are needed.
 
 The `diff` directory contains some diff files for the ICON code. This is already
@@ -239,17 +247,17 @@ incorporated in `src/ICON_DWD_NWP_DEPHY`.
 The `arm-comble-mip` directory is the [COMBLE MIP
 repository](https://github.com/arm-development/comble-mip/) as on GitHub.
 
-Some old code is located `bin/_`, `bin/postproc_step/_`, and `src/_`. You at
+Some old code is located in `bin/_`, `bin/postproc_step/_`, and `src/_`. Use at
 your own peril.
 
-`runs_AP` is a symlink to original runs performed by Anna, and `runs_AP_rw` are
-some additional files/plots produced for the former, mostly for testing purposes
-only.
+`runs_AP` is a symlink to the original runs performed by Anna, and `runs_AP_rw`
+are some additional files/plots produced for the former, mostly for testing
+purposes only.
 
 The `plots` directory contains some old plots.
 
 ## Contact
 
-More information you can contact either [Anna
+For more information, you can contact either [Anna
 Possner](mailto:apossner@iau.uni-frankfurt.de) or [Peter
 Kuma](mailto:peter@peterkuma.net).
