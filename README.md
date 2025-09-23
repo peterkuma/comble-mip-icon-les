@@ -17,6 +17,11 @@ The following experiments are supported:
 - **ProgNa** (alt) [see `ALT_PROGNA` in `bin/postproc_steps/dephy` for the
   description of the alt case]
 
+Some information about the ICON runs for the COMBLE MIP is in the poster
+[Exploring sensitivity to ice nucleating particles and secondary ice production
+during COMBLE in idealised ICON large eddy
+simulations](https://zenodo.org/records/15174379).
+
 ## Anna's files
 
 Anna's original files for the COMBLE MIP experiment are under:
@@ -234,12 +239,14 @@ incorporated in `src/ICON_DWD_NWP_DEPHY`.
 The `arm-comble-mip` directory is the [COMBLE MIP
 repository](https://github.com/arm-development/comble-mip/) as on GitHub.
 
-Some old code is located `bin/_` and `bin/postproc_step/_`. You at your own
-peril.
+Some old code is located `bin/_`, `bin/postproc_step/_`, and `src/_`. You at
+your own peril.
 
 `runs_AP` is a symlink to original runs performed by Anna, and `runs_AP_rw` are
 some additional files/plots produced for the former, mostly for testing purposes
 only.
+
+The `plots` directory contains some old plots.
 
 ## Contact
 
