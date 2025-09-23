@@ -1,0 +1,24 @@
+commit 4092f27d5ef6ec065f8d76e81a4dc2d5d752171e
+Author: Peter Kuma <peter@peterkuma.net>
+Date:   Fri Mar 21 10:14:05 2025 +0100
+
+    FixN_def_z0 COMBLE MIP experiment
+    
+    Changes by Anna Possner.
+
+diff --git a/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90 b/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
+index f2d4211a13..e07ac45f6b 100644
+--- a/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
++++ b/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
+@@ -400,7 +400,10 @@ SUBROUTINE nwp_turbdiff  ( tcall_turb_jg,                     & !>in
+           & dz_bs        = p_metrics%z_mc(:,nlev,jb)-p_metrics%z_ifc(:,nlevp1,jb),& !in
+           !for noq z0m is assumed to be equal to z0h - GABLS1
+           & z0m          = prm_diag%gz0        (:,jb)/grav,                       & !in
+-          & z0h          = prm_diag%gz0        (:,jb)/grav,                       & !in
++!APtest>>
++!          & z0h          = prm_diag%gz0        (:,jb)/grav,                       & !in
++          & z0h          = 5.5e-06_wp+0.0_wp*prm_diag%gz0(:,jb),                  & !in
++!APtest<<
+           & prm_nwp_tend = prm_nwp_tend,                                          & !in 
+           & tvm          = prm_diag%tvm        (:,jb),                            & !inout
+           & tvh          = prm_diag%tvh        (:,jb),                            & !inout

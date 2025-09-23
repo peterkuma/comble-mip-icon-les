@@ -1,0 +1,724 @@
+diff --git a/externals/ecrad b/externals/ecrad
+--- a/externals/ecrad
++++ b/externals/ecrad
+@@ -1 +1 @@
+-Subproject commit 1114244801c786f1550ffeb3a4725967f82d76df
++Subproject commit 1114244801c786f1550ffeb3a4725967f82d76df-dirty
+diff --git a/src/advection/mo_advection_stepping.f90 b/src/advection/mo_advection_stepping.f90
+index 3d76c56a88..5ef261e703 100644
+--- a/src/advection/mo_advection_stepping.f90
++++ b/src/advection/mo_advection_stepping.f90
+@@ -79,6 +79,10 @@ MODULE mo_advection_stepping
+   USE mo_grid_config,         ONLY: l_limited_area
+   USE mo_initicon_config,     ONLY: is_iau_active, iau_wgt_adv
+   USE mo_fortran_tools,       ONLY: negative2zero
++!APtest>>
++  USE mo_run_config,          ONLY: iqc,iqnc
++  USE mo_exception,           ONLY: message, message_text
++!APtest<<
+ #ifdef _OPENACC
+   USE mo_mpi,                 ONLY: i_am_accel_node
+ #endif
+@@ -862,6 +866,17 @@ CONTAINS
+       END DO  TRACERLOOP
+       !$ACC END PARALLEL
+ 
++      !APtest>>
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      ! correct fixed qnc
++      DO jk = 1, p_patch%nlev
++        DO jc = i_startidx, i_endidx
++              if (tracer_new(jc,jk,jb,iqc) > 1.0e-12_wp) tracer_new(jc,jk,jb,iqnc)=20.0e+6_wp
++        ENDDO  !jc
++      ENDDO  !jk
++      CALL message('APtest', "I call vert adv")
++      !APtest<<
++
+     END DO  !jb
+ !$OMP END DO NOWAIT
+ !$OMP END PARALLEL
+@@ -1062,6 +1077,17 @@ CONTAINS
+         ENDIF  ! ihadv_tracer(jt) /= 0
+ 
+       ENDDO TRACERLOOP
++      !APtest>>
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      ! correct fixed qnc
++      DO jk = 1, nlev
++        DO jc = i_startidx, i_endidx
++              if (tracer_new(jc,jk,jb,iqc) > 1.0e-12_wp) tracer_new(jc,jk,jb,iqnc)=20.0e+6_wp
++        ENDDO  !jc
++      ENDDO  !jk
++      CALL message('APtest', "I call hori adv")
++      !APtest<<
++
+ 
+     END DO  !jb
+ !$OMP END DO NOWAIT
+diff --git a/src/atm_phy_nwp/mo_nh_interface_nwp.f90 b/src/atm_phy_nwp/mo_nh_interface_nwp.f90
+index 30763290d3..c15dc25812 100644
+--- a/src/atm_phy_nwp/mo_nh_interface_nwp.f90
++++ b/src/atm_phy_nwp/mo_nh_interface_nwp.f90
+@@ -2196,26 +2196,54 @@ CONTAINS
+               ! simplified radiation scheme
+               IF(is_sim_rad) THEN
+                 z_ddt_temp(jc,jk)     = z_ddt_temp(jc,jk)           &
+-                                      + prm_nwp_tend%ddt_temp_sim_rad(jc,jk,jb)
++                                      + prm_nwp_tend%ddt_temp_sim_rad(jc,jk,jb)                        
++                                      
+               ENDIF
++              
++              !MS: Check pmetrics and vertical level value
++              !WRITE(*,*) "p_metrics/grav value uvt: ", p_metrics%geopot_agl(jc,jk,jb)/grav, &
++              !        &  "Vertical level uvt: ", jk
++              !MS
+ 
+               ! linear nudging profile between "start" and "full" heights - prevent sfc layer instability
+               IF ( nudge_full_height_uv == nudge_start_height_uv ) THEN
+-                nudgecoeff_uv = 1.0_wp
++                !MS: This case was not correct before: it was nudged over all heights
++                IF ( p_metrics%geopot_agl(jc,jk,jb)/grav >= nudge_start_height_uv ) THEN
++                  nudgecoeff_uv = 1.0_wp
++                ELSE
++                  nudgecoeff_uv = 0.0_wp
++                ENDIF
++                !nudgecoeff_uv = 1.0_wp
++                !MS
+               ELSE
+                 nudgecoeff_uv = ( p_metrics%geopot_agl(jc,jk,jb)/grav - nudge_start_height_uv ) / &
+                            & ( nudge_full_height_uv                   - nudge_start_height_uv )
+                 nudgecoeff_uv = MAX( MIN( nudgecoeff_uv, 1.0_wp ), 0.0_wp )
+-              END IF             
++              END IF     
++              
++              !MS: Check nudging coefficient uv
++              !WRITE(*,*) "Nudging coefficient uv: ",  nudgecoeff_uv
++              !MS
+ 
+               ! linear nudging profile between "start" and "full" heights - prevent sfc layer instability
+               IF ( nudge_full_height_t == nudge_start_height_t ) THEN
+-                nudgecoeff_t = 1.0_wp
++                !MS: This case was not correct before: it was nudged over all heights
++                IF ( p_metrics%geopot_agl(jc,jk,jb)/grav >= nudge_start_height_t ) THEN
++                  nudgecoeff_t = 1.0_wp
++                ELSE
++                  nudgecoeff_t = 0.0_wp
++                ENDIF
++                !nudgecoeff_t = 1.0_wp
++                !MS
+               ELSE
+                 nudgecoeff_t = ( p_metrics%geopot_agl(jc,jk,jb)/grav - nudge_start_height_t ) / &
+                            & ( nudge_full_height_t                   - nudge_start_height_t )
+                 nudgecoeff_t = MAX( MIN( nudgecoeff_t, 1.0_wp ), 0.0_wp )
+               END IF
++              
++              !MS: Check nudging coefficient T
++              !WRITE(*,*) "Nudging coefficient T: ",  nudgecoeff_t
++              !MS
+              
+               ! add u/v/T nudging
+               IF ( is_nudging_uv ) THEN
+diff --git a/src/atm_phy_nwp/mo_nwp_diagnosis.f90 b/src/atm_phy_nwp/mo_nwp_diagnosis.f90
+index 37840abf76..8d68227df3 100644
+--- a/src/atm_phy_nwp/mo_nwp_diagnosis.f90
++++ b/src/atm_phy_nwp/mo_nwp_diagnosis.f90
+@@ -2395,6 +2395,14 @@ CONTAINS
+                qnimax(jb) = MAX(qnimax(jb),ptr_tracer(jc,jk,jb,iqni))
+                qnimin(jb) = MIN(qnimin(jb),ptr_tracer(jc,jk,jb,iqni))
+             END IF
++            !APtest>>
++            IF(atm_phy_nwp_config(jg)%inwp_gscp==4)THEN
++               qncmax(jb) = MAX(qncmax(jb),ptr_tracer(jc,jk,jb,iqnc))
++               qncmin(jb) = MIN(qncmin(jb),ptr_tracer(jc,jk,jb,iqnc))
++               qnimax(jb) = MAX(qnimax(jb),ptr_tracer(jc,jk,jb,iqni))
++               qnimin(jb) = MIN(qnimin(jb),ptr_tracer(jc,jk,jb,iqni))
++            END IF
++            !APtest<<
+          ENDDO
+       ENDDO
+ 
+@@ -2437,6 +2445,14 @@ CONTAINS
+        qnimaxi = MAXVAL(qnimax(i_startblk:i_endblk))
+        qnimini = MINVAL(qnimin(i_startblk:i_endblk))
+     END IF
++    !APtest>>
++    IF(atm_phy_nwp_config(jg)%inwp_gscp==4)THEN
++       qncmaxi = MAXVAL(qncmax(i_startblk:i_endblk))
++       qncmini = MINVAL(qncmin(i_startblk:i_endblk))
++       qnimaxi = MAXVAL(qnimax(i_startblk:i_endblk))
++       qnimini = MINVAL(qnimin(i_startblk:i_endblk))
++    END IF
++    !APtest<<
+ 
+     ! Take maximum/minimum over all PEs
+     wmaxi  = global_max(wmaxi)
+@@ -2473,6 +2489,14 @@ CONTAINS
+        qnimaxi = global_max(qnimaxi)
+        qnimini = global_min(qnimini)
+     END IF
++!APtest>>
++    if (atm_phy_nwp_config(jg)%inwp_gscp==4)THEN
++       qncmaxi = global_max(qncmaxi)
++       qncmini = global_min(qncmini)
++       qnimaxi = global_max(qnimaxi)
++       qnimini = global_min(qnimini)
++    endif
++!APtest<<
+ 
+     ! Standard output
+     SELECT CASE (atm_phy_nwp_config(jg)%inwp_gscp)
+@@ -2484,11 +2508,11 @@ CONTAINS
+        WRITE(message_text,'(A10,8E11.3)') '  min: ', wmini,qvmini,qcmini,qrmini,qimini,qsmini
+        CALL message("",TRIM(message_text))
+     CASE(4,8)
+-       WRITE(message_text,'(A10,9A11)')   '  var: ', 'w','qv','qc','qr','qi','qs','qg','qh','temp'
++       WRITE(message_text,'(A10,10A11)')   '  var: ', 'w','qv','qc','qr','qi','qs','qg','qh','qnc','qni'
+        CALL message("",TRIM(message_text))
+-       WRITE(message_text,'(A10,9E11.3)') '  max: ', wmaxi,qvmaxi,qcmaxi,qrmaxi,qimaxi,qsmaxi,qgmaxi,qhmaxi,tmaxi
++       WRITE(message_text,'(A10,10E11.3)') '  max: ', wmaxi,qvmaxi,qcmaxi,qrmaxi,qimaxi,qsmaxi,qgmaxi,qhmaxi,qncmaxi,qnimaxi
+        CALL message("",TRIM(message_text))
+-       WRITE(message_text,'(A10,9E11.3)') '  min: ', wmini,qvmini,qcmini,qrmini,qimini,qsmini,qgmini,qhmini,tmini
++       WRITE(message_text,'(A10,10E11.3)') '  min: ', wmini,qvmini,qcmini,qrmini,qimini,qsmini,qgmini,qhmini,qncmini,qnimini
+        CALL message("",TRIM(message_text))
+     CASE(5)
+        WRITE(message_text,'(A10,10A11)')   '  var: ', 'w','qv','qc','qr','qi','qs','qg','qh','qnc','qni'
+diff --git a/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90 b/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
+index f2d4211a13..e07ac45f6b 100644
+--- a/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
++++ b/src/atm_phy_nwp/mo_nwp_turbdiff_interface.f90
+@@ -400,7 +400,10 @@ SUBROUTINE nwp_turbdiff  ( tcall_turb_jg,                     & !>in
+           & dz_bs        = p_metrics%z_mc(:,nlev,jb)-p_metrics%z_ifc(:,nlevp1,jb),& !in
+           !for noq z0m is assumed to be equal to z0h - GABLS1
+           & z0m          = prm_diag%gz0        (:,jb)/grav,                       & !in
+-          & z0h          = prm_diag%gz0        (:,jb)/grav,                       & !in
++!APtest>>
++!          & z0h          = prm_diag%gz0        (:,jb)/grav,                       & !in
++          & z0h          = 5.5e-06_wp+0.0_wp*prm_diag%gz0(:,jb),                  & !in
++!APtest<<
+           & prm_nwp_tend = prm_nwp_tend,                                          & !in 
+           & tvm          = prm_diag%tvm        (:,jb),                            & !inout
+           & tvh          = prm_diag%tvh        (:,jb),                            & !inout
+diff --git a/src/atm_phy_nwp/mo_util_phys.f90 b/src/atm_phy_nwp/mo_util_phys.f90
+index 3d10ac229d..62c4242449 100644
+--- a/src/atm_phy_nwp/mo_util_phys.f90
++++ b/src/atm_phy_nwp/mo_util_phys.f90
+@@ -833,15 +833,28 @@ CONTAINS
+ 
+             ! add q nudging (T, U, V nudging is in mo_nh_interface_nwp)
+             IF ( is_nudging_q ) THEN
+-
++              !MS: Check pmetrics value
++              !WRITE(*,*) "p_metrics/grav value q: ", p_metrics%geopot_agl(jc,jk,jb)/grav, &
++              !        &  "Vertical level q: ", jk
++              !MS
+               ! linear nudging profile between "start" and "full" heights - prevent sfc layer instability
+               IF ( nudge_full_height_q == nudge_start_height_q ) THEN
+-                nudgecoeff = 1.0_wp
++                !MS: This case was not correct before: it was nudged over all heights
++                IF ( p_metrics%geopot_agl(jc,jk,jb)/grav >= nudge_start_height_q ) THEN
++                  nudgecoeff = 1.0_wp
++                ELSE
++                  nudgecoeff = 0.0_wp
++                ENDIF
++                !nudgecoeff = 1.0_wp
++                !MS
+               ELSE
+                 nudgecoeff = ( p_metrics%geopot_agl(jc,jk,jb)/grav - nudge_start_height_q ) / &
+                            & ( nudge_full_height_q                 - nudge_start_height_q )
+                 nudgecoeff = MAX( MIN( nudgecoeff, 1.0_wp ), 0.0_wp )
+               END IF
++              !MS: Check nudging coefficient q
++              !WRITE(*,*) "Nudging coefficient q: ",  nudgecoeff
++              !MS
+               ! analytic implicit: (q,n+1 - q,n) / dt = (q,nudge - q,n) / dt_relax * exp(-dt/dt_relax)
+               z_ddt_q_nudge =                                                          &
+                 &  - ( pt_prog_rcf%tracer(jc,jk,jb,jt) - prm_nwp_tend%q_nudge(jk,jt) ) &
+diff --git a/src/atm_phy_schemes/mo_2mom_mcrph_driver.f90 b/src/atm_phy_schemes/mo_2mom_mcrph_driver.f90
+index 760b973b3c..247dd1462e 100644
+--- a/src/atm_phy_schemes/mo_2mom_mcrph_driver.f90
++++ b/src/atm_phy_schemes/mo_2mom_mcrph_driver.f90
+@@ -123,7 +123,13 @@ USE mo_nwp_tuning_config,  ONLY: tune_sbmccn
+ !! Now in namelist phy_ctl!  INTEGER, PARAMETER :: i2mom_solver = 1  ! (0) explicit (1) semi-implicit solve
+ !!$  ! now this comes from cfg_params !  INTEGER, PARAMETER :: i2mom_solver = 1  ! (0) explicit (1) semi-implicit solve
+   
+-  INTEGER, PARAMETER :: cloud_type_default_gscp4 = 2603, ccn_type_gscp4 = 7
++  !APtest>> constant cloud number is forced by nuc_c_typ=0, so leave third digit as "0"
++  !in order to perform diagnostic freezing, modify cloud_type_default_gscp4=2603 and specify
++  !a value lower than 5 for the second digit
++
++  !INTEGER, PARAMETER :: cloud_type_default_gscp4 = 2603, ccn_type_gscp4 = 7
++  INTEGER, PARAMETER :: cloud_type_default_gscp4 = 2503, ccn_type_gscp4 = 0
++  !APtest<<
+   INTEGER, PARAMETER :: cloud_type_default_gscp5 = 2603, ccn_type_gscp5 = 8
+ 
+   ! AS: For gscp=4 use 2103 with ccn_type = 1 (HDCP2 IN and CCN schemes)
+@@ -575,10 +581,13 @@ CONTAINS
+           IF ( nccn(ii,kk) < 35e6_wp ) nccn(ii,kk) = 35e6_wp
+         ENDDO
+       END IF
+-  
++      
+       !$ACC LOOP GANG(STATIC: 1) VECTOR
+       DO ii = its,ite
+         IF(qc(ii,kk) < 1.0e-12_wp) qnc(ii,kk) = 0.0_wp
++!APtest>>
++        IF (qc(ii,kk) >= 1.0e-12_wp) qnc(ii,kk) = 20.0e6_wp*rho_r(ii,kk)
++!APtest<<
+       ENDDO
+ 
+     ENDDO
+@@ -1294,10 +1303,14 @@ CONTAINS
+       ccn_coeffs%lsigs = 0.2d0
+       ccn_coeffs%R2    = 0.03d0       ! in mum
+       ccn_coeffs%etas  = 0.7          ! soluble fraction
+-     CASE(1)
++!APtest>>
++!     CASE(1)
++     CASE(0, 1)
++!need to specify ccn_coeff dummy values even if not used
++!APtest<<
+        !... dummy values
+        ccn_coeffs%Ncn0  =  200.0d06
+-       ccn_coeffs%Nmin  =   10.0d06
++       ccn_coeffs%Nmin  =  10.0d06   
+        ccn_coeffs%lsigs = 0.0
+        ccn_coeffs%R2    = 0.0
+        ccn_coeffs%etas  = 0.0
+diff --git a/src/atm_phy_schemes/mo_2mom_mcrph_main.f90 b/src/atm_phy_schemes/mo_2mom_mcrph_main.f90
+index c15ffd66a4..3643385788 100644
+--- a/src/atm_phy_schemes/mo_2mom_mcrph_main.f90
++++ b/src/atm_phy_schemes/mo_2mom_mcrph_main.f90
+@@ -151,7 +151,10 @@ MODULE mo_2mom_mcrph_main
+ 
+   ! for constant droplet number runs
+   ! (will be set during init, but currently not used by any implementation)
+-  real(wp) :: qnc_const = 200.0e6_wp
++  !APtest>>
++  !real(wp) :: qnc_const = 200.0e6_wp
++  real(wp) :: qnc_const = 20.0e6_wp
++  !APtest<<
+ 
+   ! Derived types that contain run-time coefficients for each particle type
+   TYPE(particle_ice_coeffs)      :: ice_coeffs
+@@ -652,11 +655,34 @@ CONTAINS
+     IF (cfg_params%iicephase .EQ. 1) THEN
+ 
+       ! homogeneous and heterogeneous ice nucleation
+-      CALL ice_nucleation_homhet(ik_slice, use_prog_in, atmo, cloud, ice, n_inact, n_inpot)
++      !APtest>>
++!      CALL ice_nucleation_homhet(ik_slice, use_prog_in, atmo, cloud, ice, n_inact, n_inpot)
++      CALL ice_nucleation_homhet(ik_slice, use_prog_in, atmo, cloud, rain, ice, n_inact, n_inpot)
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++      !APtest<<
+ 
+       ! homogeneous freezing of cloud droplets
+       CALL cloud_freeze(ik_slice, dt, cloud_coeffs, qnc_const, atmo, cloud, ice)
+       IF (ischeck) CALL check(ik_slice,'cloud_freeze', cloud, rain, ice, snow, graupel,hail)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
+ 
+       !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
+       !$ACC LOOP GANG VECTOR COLLAPSE(2)
+@@ -675,6 +701,19 @@ CONTAINS
+       !   ice_riming and snow_riming )
+       CALL vapor_dep_relaxation(ik_slice,dt,ice_coeffs,snow_coeffs,graupel_coeffs,hail_coeffs,&
+            &                    atmo,ice,snow,graupel,hail,dep_rate_ice,dep_rate_snow)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
++
+       IF (ischeck) CALL check(ik_slice,'vapor_dep_relaxation',cloud,rain,ice,snow,graupel,hail)
+ 
+       ! ice-ice collisions
+@@ -693,6 +732,17 @@ CONTAINS
+       CALL graupel_hail_conv_wet_gamlook(ik_slice, graupel_ltable1, graupel_ltable2,       &
+            &                             graupel_nm1, graupel_nm2, graupel_g1, graupel_g2, &
+            &                             ltabdminwgg, atmo, graupel, cloud, rain, ice, snow, hail)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
+       IF (timers_level > 10) CALL  timer_stop(timer_phys_2mom_wetgrowth)
+       IF (ischeck) CALL check(ik_slice, 'graupel_hail_conv_wet_gamlook',cloud,rain,ice,snow,graupel,hail)
+ 
+@@ -703,19 +753,69 @@ CONTAINS
+ 
+       ! riming of ice with cloud droplets and rain drops, and conversion to graupel
+       CALL ice_riming(ik_slice, dt, icr_coeffs, irr_coeffs, atmo, ice, cloud, rain, graupel, dep_rate_ice)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
++
+       IF (ischeck) CALL check(ik_slice, 'ice_riming',cloud,rain,ice,snow,graupel,hail)
+ 
+       ! riming of snow with cloud droplets and rain drops, and conversion to graupel
+       CALL snow_riming(ik_slice, dt, scr_coeffs, srr_coeffs, atmo, snow, cloud, rain, ice, graupel, dep_rate_snow)
+       IF (ischeck) CALL check(ik_slice, 'snow_riming',cloud,rain,ice,snow,graupel,hail)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
+ 
+       ! hail-cloud and hail-rain riming
+       CALL particle_cloud_riming(ik_slice, dt, atmo, hail, hcr_coeffs, cloud, rain, ice)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
++
+       CALL particle_rain_riming(ik_slice, dt, atmo, hail, hrr_coeffs, rain, ice)
+       IF (ischeck) CALL check(ik_slice, 'hail riming',cloud,rain,ice,snow,graupel,hail)
+ 
+       ! graupel-cloud and graupel-rain riming
+       CALL particle_cloud_riming(ik_slice, dt, atmo, graupel, gcr_coeffs, cloud, rain, ice)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
++
+       CALL particle_rain_riming(ik_slice, dt, atmo, graupel, grr_coeffs, rain, ice)
+       IF (ischeck) CALL check(ik_slice, 'graupel riming',cloud,rain,ice,snow,graupel,hail)
+ 
+@@ -727,6 +827,19 @@ CONTAINS
+ 
+       ! melting of ice and snow
+       CALL ice_melting(ik_slice, atmo, ice, cloud, rain)
++      !APtest>>
++      !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++      !APtest<<
++
+       CALL snow_melting(ik_slice,dt,snow_coeffs,atmo,snow,rain)
+ 
+       ! melting of graupel and hail can be simple or LWF-based
+@@ -780,13 +893,49 @@ CONTAINS
+        CALL rain_selfcollectionSB(ik_slice, dt, atmo, rain)
+     ELSE IF (auto_typ == 3) THEN
+        CALL autoconversionSB(ik_slice, dt, atmo, cloud_coeffs, cloud, rain) 
++       !APtest>>
++       !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++       !APtest<<
+        CALL accretionSB(ik_slice, dt, atmo, cloud, rain)
++       !APtest>>
++       !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++       !APtest<<
+        CALL rain_selfcollectionSB(ik_slice, dt, atmo, rain)
+     ENDIF
+     IF (ischeck) CALL check(ik_slice,'warm rain',cloud,rain,ice,snow,graupel,hail)
+ 
+     ! evaporation of rain following Seifert (2008)
+     CALL rain_evaporation(ik_slice, dt, rain_coeffs, rain_gfak, atmo, cloud, rain)
++    !APtest>>
++    !cloud%n(:,:) = qnc_const
++      !$ACC PARALLEL DEFAULT(PRESENT) ASYNC(1)
++      !$ACC LOOP GANG VECTOR COLLAPSE(2)
++      DO k=kstart,kend
++        DO i=istart,iend
++         cloud%n(i,k) = qnc_const
++        ENDDO
++      ENDDO
++      !$ACC END PARALLEL
++
++    !APtest<<
+ 
+     !$ACC PARALLEL ASYNC(1) DEFAULT(PRESENT)
+     DO k=kstart,kend
+diff --git a/src/atm_phy_schemes/mo_2mom_mcrph_processes.f90 b/src/atm_phy_schemes/mo_2mom_mcrph_processes.f90
+index 389a5aac95..756cc33556 100644
+--- a/src/atm_phy_schemes/mo_2mom_mcrph_processes.f90
++++ b/src/atm_phy_schemes/mo_2mom_mcrph_processes.f90
+@@ -1610,8 +1610,12 @@ CONTAINS
+ 
+   END SUBROUTINE cloud_freeze
+ 
++!APtest>>
++!  SUBROUTINE ice_nucleation_homhet(ik_slice, use_prog_in, &
++!       atmo, cloud,  ice_in, n_inact, n_inpot)
+   SUBROUTINE ice_nucleation_homhet(ik_slice, use_prog_in, &
+-       atmo, cloud, ice_in, n_inact, n_inpot)
++       atmo, cloud, rain,  ice_in, n_inact, n_inpot)
++!APtest<<
+     !*******************************************************************************
+     !                                                                              *
+     ! Homogeneous and heterogeneous ice nucleation                                 *
+@@ -1638,7 +1642,10 @@ CONTAINS
+     TYPE(atmosphere), INTENT(inout) :: atmo
+     CLASS(particle), INTENT(inout), TARGET :: ice_in
+     CLASS(particle), POINTER :: ice ! ACCWA (nvhpc 22.7, IPSF, see above)
+-    CLASS(particle), INTENT(inout) :: cloud
++!APtest>>
++!    CLASS(particle), INTENT(inout) :: cloud
++    CLASS(particle), INTENT(inout) :: cloud, rain
++!APtest<<
+     REAL(wp), DIMENSION(:,:) :: n_inact
+     REAL(wp), DIMENSION(:,:), OPTIONAL :: n_inpot
+ 
+@@ -1756,8 +1763,13 @@ CONTAINS
+              & 'Error in two_moment_mcrph: Invalid value nuc_typ in case of &
+              &use_hdcp2_het=.true.')
+       END IF
+-      CALL ice_nucleation_het_hdcp2(ik_slice, atmo, ice, cloud, &
+-           use_prog_in, hdcp2_nuc_coeffs(nuc_typ), n_inact, ndiag_mask, nuc_n_a)
++      !APtest>> I am using existing framework to implement diagnostic heterogeneous freezing
++      !as specified by COMBLE setup
++      !CALL ice_nucleation_het_hdcp2(ik_slice, atmo, ice, cloud, &
++      !     use_prog_in, hdcp2_nuc_coeffs(nuc_typ), n_inact, ndiag_mask, nuc_n_a)
++      CALL message(routine, "APtest: calling ice_nucleation_het_comble")
++      Call ice_nucleation_het_comble(ik_slice, atmo, ice, cloud, rain) 
++      !APtest<<
+     ELSE
+       ! Heterogeneous nucleation using Phillips et al. scheme
+       IF (iphillips == 2010) THEN
+@@ -1883,6 +1895,57 @@ CONTAINS
+ 
+   END SUBROUTINE ice_nucleation_homhet
+ 
++!APtest>> new subroutine treating diagnostic immersion freezing as specified by COMBLE intercomparison
++  SUBROUTINE ice_nucleation_het_comble(ik_slice, atmo, ice, cloud, rain)
++
++    INTEGER, INTENT(in) :: ik_slice(4)
++    TYPE(atmosphere), INTENT(inout) :: atmo
++    CLASS(particle), INTENT(inout) :: ice, cloud, rain
++    REAL(wp)             :: T_a, qc, qr, n_diag, ni, qliq
++
++    ! start and end indices for 2D slices
++    INTEGER :: istart, iend, kstart, kend
++    INTEGER :: i, k
++ 
++    !convert 25 L-1 to m-3 
++    n_diag=25.0e+03_wp   ! #/m-3
++
++    istart = ik_slice(1)
++    iend   = ik_slice(2)
++    kstart = ik_slice(3)
++    kend   = ik_slice(4)
++
++    istart = ik_slice(1)
++    iend   = ik_slice(2)
++    kstart = ik_slice(3)
++    kend   = ik_slice(4)
++
++    !$ACC PARALLEL ASYNC(1) DEFAULT(PRESENT)
++    !$ACC LOOP GANG VECTOR COLLAPSE(2) &
++    !$ACC   PRIVATE(T_a, e_si, ssi, xt, tt, infrac, xs, ss, ssr) &
++    !$ACC   PRIVATE(ndiag, ndiag_dust, ndiag_all, nuc_n, nuc_q, lwrite_n_inpot)
++    DO k = kstart,kend
++!NEC$ ivdep
++      DO i = istart,iend
++      
++        T_a  = atmo%T(i,k)
++        qc = cloud%q(i,k)
++        qr = rain%q(i,k)
++        ni = ice%n(i,k)
++        qliq = qc + qr
++
++        IF (T_a < 268.15_wp .AND. qliq>1.0e-06_wp ) THEN
++           if (ni < n_diag) then
++             ice%n(i,k)=n_diag
++           endif
++        ENDIF
++      ENDDO
++    ENDDO
++    !$ACC END PARALLEL
++
++  END SUBROUTINE ice_nucleation_het_comble
++!APtest<<
++
+   SUBROUTINE ice_nucleation_het_philips(ik_slice, atmo, ice, cloud, &
+        use_prog_in, n_inact, ndiag_mask, nuc_n_a, n_inpot)
+     ! start and end indices for 2D slices
+@@ -2444,7 +2507,10 @@ CONTAINS
+                    fr_q_tmp = q_r/MAX(fr_q,q_r)
+                 ELSE
+                    !..heterogeneous freezing
+-                   j_het = MAX(b_HET * ( EXP( a_HET * (T_3 - T_a)) - 1.0_wp ),0.0_wp) / rho_w * dt
++!APtest>> heterogenous freezing of rain is considered differntly in COMBLE
++!                   j_het = MAX(b_HET * ( EXP( a_HET * (T_3 - T_a)) - 1.0_wp ),0.0_wp) / rho_w * dt
++                   j_het = 0.0_wp
++!APtest<<
+ !!                   if (use_prog_in) j_het = MIN(j_het, n_inact(i,k)/q_r)
+ 
+                    ! Je nach Groesse werden die gefrorenen Regentropfen dem Wolkeneis zugeschlagen
+diff --git a/src/atm_phy_schemes/mo_2mom_mcrph_util.f90 b/src/atm_phy_schemes/mo_2mom_mcrph_util.f90
+index 197dd9b423..9c0fdbbf32 100644
+--- a/src/atm_phy_schemes/mo_2mom_mcrph_util.f90
++++ b/src/atm_phy_schemes/mo_2mom_mcrph_util.f90
+@@ -2055,7 +2055,10 @@ CONTAINS
+     REAL(wp), PARAMETER   :: Dmean = 10e-6_wp    ! Diameter of mean particle mass:
+ 
+ !    set_qnc = qc * 6.0_wp / (pi * rhoh2o * Dmean**3.0_wp)
+-    set_qnc = qc * 6.0_wp / (pi * rhoh2o * EXP(LOG(Dmean)*3.0_wp) )
++!APtest>>
++!    set_qnc = qc * 6.0_wp / (pi * rhoh2o * EXP(LOG(Dmean)*3.0_wp) )
++    set_qnc = 20.0e6_wp  !i.e. equal to qnc_const
++!APtest<<
+ 
+   END FUNCTION set_qnc
+ 
+diff --git a/src/atm_phy_schemes/mo_reff_main.f90 b/src/atm_phy_schemes/mo_reff_main.f90
+index 0f4302f2fe..f3fb7ddd4f 100644
+--- a/src/atm_phy_schemes/mo_reff_main.f90
++++ b/src/atm_phy_schemes/mo_reff_main.f90
+@@ -738,7 +738,10 @@ MODULE mo_reff_main
+         !$ACC LOOP GANG VECTOR PRIVATE(jc)
+         DO ic  = 1,n_ind(k)
+           jc        = indices(ic,k)
+-          ncn(jc,k) = space_cloud_num(jc,k)
++    !APtest>>
++    !      ncn(jc,k) = space_cloud_num(jc,k)
++           ncn(ic,k) = 20.0e6
++    !APtest<<
+         END DO
+       END DO
+       !$ACC END PARALLEL
+diff --git a/src/shared/mo_impl_constants.f90 b/src/shared/mo_impl_constants.f90
+index 2c2f26b4e3..63f41bf845 100644
+--- a/src/shared/mo_impl_constants.f90
++++ b/src/shared/mo_impl_constants.f90
+@@ -551,7 +551,7 @@ MODULE mo_impl_constants
+   INTEGER, PARAMETER :: MAX_TIME_LEVELS = 5
+ 
+   INTEGER, PARAMETER :: MAX_NPLEVS = 100 !< max. no. of pressure levels
+-  INTEGER, PARAMETER :: MAX_NZLEVS = 100 !< max. no. of height levels
++  INTEGER, PARAMETER :: MAX_NZLEVS = 300 !< max. no. of height levels
+   INTEGER, PARAMETER :: MAX_NILEVS = 100 !< max. no. of isentropic levels
+ 
+   INTEGER, PARAMETER :: nlat_moc = 180 !< number of buckets for moc
+diff --git a/src/testcases/mo_nh_testcases.f90 b/src/testcases/mo_nh_testcases.f90
+index df6cac5505..8ac6b1b09b 100644
+--- a/src/testcases/mo_nh_testcases.f90
++++ b/src/testcases/mo_nh_testcases.f90
+@@ -1508,7 +1508,10 @@ MODULE mo_nh_testcases
+ 
+       CALL add_random_noise_global(in_subset=p_patch(jg)%cells%all,          &
+                     & in_var=p_nh_state(jg)%prog(nnow(jg))%theta_v(:,:,:),   &
+-                    & start_level=nlev-3,                                    &
++!APtest>> modification for COMBLE noise added up to 250m.
++                    & start_level=nlev-10,                                   &
++!                      & start_level=nlev-3,                                    &
++!APtest<<
+                     & end_level=nlev,                                        &
+                     & noise_scale=th_perturb )   
+     ENDIF
+diff --git a/src/testcases/mo_nh_torus_exp.f90 b/src/testcases/mo_nh_torus_exp.f90
+index b729c93466..06558d00f3 100644
+--- a/src/testcases/mo_nh_torus_exp.f90
++++ b/src/testcases/mo_nh_torus_exp.f90
+@@ -1198,6 +1198,7 @@ MODULE mo_nh_torus_exp
+     CALL nf (nf_get_var_double(fileid, varid, tempf) , routine)
+     vs = tempf(klev:1:-1,1)
+ 
++
+     CALL nf (nf_inq_varid     (fileid, 'qv', varid)  , routine)
+     CALL nf (nf_get_var_double(fileid, varid, tempf) , routine)
+     qvs = tempf(klev:1:-1,1)
+@@ -1215,7 +1216,6 @@ MODULE mo_nh_torus_exp
+     psfc_in = tempf_s(1)
+ 
+     CALL nf (nf_inq_varid     (fileid, 'tke', varid) , routine)
+-    CALL nf (nf_get_var_double(fileid, varid, tempf) , routine)
+     tkes(1:klev) = tempf(klev:1:-1,1)
+ 
+     nf_status  = nf_inq_varid     (fileid, 'wa'  , varid)
+@@ -2042,6 +2042,10 @@ MODULE mo_nh_torus_exp
+     CALL nf (nf_inq_dimlen(fileid, dimid, nt)   , routine)
+ 
+     ALLOCATE(tmp_nf(nt))
++    
++    !MS Need to initialize variable first before assigning a value.
++    surface_type = ''
++    !MS
+ 
+     CALL nf (nf_get_att(fileid, nf_global,'surface_type',surface_type), routine)
+ 
