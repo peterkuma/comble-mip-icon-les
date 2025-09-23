@@ -1,13 +1,456 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+'''Convert ICON LES output to DEPHY format.
 
-set -ex
+Usage: dephy TYPE EXPNAME
 
-type_=$1
-expname=$2
+Arguments:
 
-rundir=runs/$expname
+  TYPE     One of: "mean" (1D, 10-min mean) or "2d" (2D, 10-min instantaneous).
+  EXPNAME  Experiment name.
+'''
 
-bin/postproc_steps/icon2dephy \
-	mean \
-	input/comble_vars_mean.csv \
-	"$rundir/dephy_$type_.nc"
+import sys
+import os
+import copy
+import glob
+import warnings
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+import numpy as np
+import scipy.interpolate
+from netCDF4 import Dataset
+import ds_format as ds
+import datetime as dt
+
+# Constants.
+k = 0.4  # van Karman constant (1).
+g = 9.80665  # Gravitational acceleration (m s-2).
+rd = 287.04  # Specific gas constant of dry air (J kg-1 K-1).
+cpd = 1004.64  # Heat capcity of dry air at constant presssure (J kg-1 K-1).
+p0ref = 100000.0  # Atmospheric reference pressure (Pa).
+delt = 60.0  # Conversion of minutes to seconds (s min-1).
+
+#NJOBS = 32
+NJOBS = 1
+
+PREFIX = {
+	'mean': 'mean',
+	'2d': 'inst',
+}
+
+DEF_ICON_VARS = ['time', 'z_ifc', 'z_mc']
+
+REQ_ICON_VARS = {
+	'huri': ['pres', 'qv', 'temp'],
+	'iwp': ['rho', 'qi', 'qs', 'qg'],
+	'lwp': ['rho', 'qc', 'qr'],
+	'lwpr': ['rho', 'qr'],
+	'niic': ['qc', 'qi', 'qs', 'qg', 'qni', 'qns', 'qng'],
+	'nlcic': ['qc', 'qnc'],
+	'ol': ['pres_sfc', 't_g', 'shfl_s', 'umfl_s', 'vmfl_s', 'rho'],
+	'pri': ['ice_gsp_rate', 'snow_gsp_rate', 'graupel_gsp_rate'],
+	'rlds': ['thu_s', 'thb_s'],
+	'rlut': ['thb_t'],
+	'theta': ['temp', 'pres'],
+	'tke_sgs': ['tke'],
+	'us': ['u_10m'],
+	'ustar': ['umfl_s', 'vmfl_s', 'rho'],
+	'vs': ['v_10m'],
+}
+
+DEF_OPT_VARS = ['time']
+
+REQ_OPT_VARS = {
+	'alb': ['od'],
+	'clt': ['clt'],
+	'od': ['od'],
+	'odlc': ['odlc'],
+	'opt': ['od'],
+}
+
+DEF_WIND_VARS = ['alt']
+
+REQ_WIND_VARS = {
+	'hur': ['rh'],
+	'tke_res': ['u', 'v', 'w'],
+	'ua': ['u'],
+	'us': ['u'],
+	'va': ['v'],
+	'vs': ['v'],
+}
+
+GRID_VARS = ['cell_circumcenter_cartesian_x', 'cell_circumcenter_cartesian_y']
+
+FORCING_VARS = ['zw_grid']
+
+DEPHY_ATTRIBUTES = {
+	'title': 'ICON LES results for COMBLE-MIP case',
+	'reference': 'https://github.com/ARM-Development/comble-mip',
+	'authors': 'Anna Possner (apossner@iau.uni-frankfurt.de), Peter Kuma (kuma@iau.uni-frankfurt.de)',
+	'format_version': 'DEPHY SCM format version 1.6',
+	'script': 'dephy',
+	'startDate': '2020-03-12T22:00:00Z',
+	'force_geo': 1,
+	'surfaceType': 'ocean (after spin-up)',
+	'surfaceForcing': 'ts (after spin-up)',
+	'lat': '74.5 deg N',
+	'dx': '100 m',
+	'dy': '100 m',
+	'dz': 'see ze variable',
+	'nx': '182',
+	'ny': '182',
+	'nz': '180',
+}
+
+COMMENT = 'ICON has an icosahedral grid. To imitate Lx25_dx100 as closely as possible, the model has been run with 182 grid points and a edge length (of an icosahedral triangle) with 141m=sqrt(2*100^2). The surface flux scheme was changed from the LES scheme set_scm_bnd to the ICON main scheme parturs due to very high moisture fluxes with set_scm_bnd. The alpha space filling parameter was set to 0.68 in order the reduce the speed of riming.'
+
+COMMENT_NOICE = 'ICON has an icosahedral grid. To imitate Lx25_dx100 as closely as possible, the model has been run with 182 grid points and a edge length (of an icosahedral triangle) with 141m=sqrt(2*100^2). The surface flux scheme was changed from the LES scheme set_scm_bnd to the ICON main scheme parturs due to very high moisture fluxes with set_scm_bnd.'
+
+ALT_PROGNA = 'The simulation uses prescribed initial single-mode CCN profile (N_a = 105.5 cm-3, D_g = 0.14 um, sigma_g = 1.6 um, soluble fraction eta_s = 0.9, kappa not used) up to 10 km and exponentially decaying above. The CCN is depleted by cloud droplet formation during the simulation and relaxed back to the initial profile. No sea spray emissions are used. Default model INP is used.'
+
+def main(type_, expname):
+	dirname = os.path.join('runs', expname)
+	prefix = PREFIX[type_]
+	config = {
+		'def_z0': 'def_z0' in expname,
+		'noice': 'noice' in expname,
+		'progna': 'ProgNa' in expname and 'ProgNaNi' not in expname,
+		'comble_vars_file': os.path.join('input', 'comble_vars_%s.csv' % type_),
+		'icon_file': os.path.join(dirname, '%s.nc' % prefix),
+		'forcing_file': os.path.join(dirname, 'init_SCM.nc'),
+		'winds_file': os.path.join(dirname, 'winds.nc'),
+		'grid_file': os.path.join(dirname, 'grid.nc'),
+		'opt_file': os.path.join(dirname, 'opt_%s.nc' % prefix),
+		'output_file': os.path.join(dirname, 'dephy_%s.nc' % type_)
+	}
+
+	grid = ds.read(config['grid_file'], GRID_VARS)
+	forcing = ds.read(config['forcing_file'], FORCING_VARS)
+	comble = ds.read(config['comble_vars_file'])
+	out = {}
+
+	d = ds.read(config['icon_file'], [], full=True)
+	ntime = ds.dim(d, 'time', full=True)
+	ncells = ds.dim(d, 'ncells', full=True)
+	chunk_size = 2*max(1, round(3200/ncells))
+
+	with ProcessPoolExecutor(max_workers=NJOBS) as ex:
+		task = partial(process_timesteps,
+			comble=comble,
+			grid=grid,
+			forcing=forcing,
+			config=config
+		)
+		tt = list(range(ntime))
+		args = [tt[i:i+chunk_size] for i in range(0, ntime, chunk_size)]
+		res = list(ex.map(task, args))
+
+	out = ds.merge(res, 'time')
+
+	icon = ds.read(config['icon_file'], [], full=True)
+	for i, var in enumerate(comble['name']):
+		dims = comble['dims'][i].split(',')
+		ds.attr(out, 'units', comble['units'][i], var=var)
+		ds.attr(out, 'long_name', comble['standard_name'][i], var=var)
+
+	ds.attr(out, 'units', ds.attr(icon, 'units', var='time'), var='time')
+	ds.attr(out, 'calendar', ds.attr(icon, 'calendar', var='time'), var='time')
+	ds.attrs(out, None, DEPHY_ATTRIBUTES)
+	ds.attr(out, 'version', dt.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+	ds.attr(out, 'comment', COMMENT_NOICE if config['noice'] else COMMENT)
+	if config['progna']:
+		ds.attr(out, 'alt', ALT_PROGNA)
+	ds.write(config['output_file'], out)
+
+def process_timesteps(tt, comble, grid, forcing, config):
+	out = {}
+	for var, icon_name in zip(comble['name'], comble['icon_name']):
+		out1 = {}
+
+		req_icon_vars = DEF_ICON_VARS + get_req_icon_vars(var, icon_name)
+		req_wind_vars = DEF_WIND_VARS + REQ_WIND_VARS.get(var, [])
+		req_opt_vars = DEF_OPT_VARS + REQ_OPT_VARS.get(var, [])
+
+		icon = read_icon(config['icon_file'], tt, req_icon_vars)
+		winds = read_winds(config['winds_file'], tt, req_wind_vars)
+		opt = ds.read(config['opt_file'], req_opt_vars, sel={'time': tt})
+
+		if icon_name != '' and icon_name in ds.vars(icon):
+			data = ds.var(icon, icon_name)
+			dims = ds.dims(icon, icon_name)
+			ds.var(out1, var, data)
+			ds.dims(out1, var, dims)
+
+		calc_derived_var(icon, winds, opt, out1, var, config)
+		vertical_interp(icon, winds, forcing, out1)
+		horizontal_interp(icon, grid, out1)
+
+		if var in ds.vars(out1):
+			ds.var(out, var, ds.var(out1, var))
+			ds.meta(out, var, ds.meta(out1, var))
+	return out
+
+def get_req_icon_vars(name, icon_name):
+	if icon_name != '':
+		return [icon_name]
+	elif name in REQ_ICON_VARS:
+		return REQ_ICON_VARS[name]
+	else:
+		return []
+
+def convert_float64(d):
+	for var in ds.vars(d):
+		data = ds.var(d, var)
+		if data.dtype == np.float32:
+			ds.var(d, var, data.astype(np.float64))
+
+def read_icon(filename, tt, vars):
+	d = ds.read(filename, vars, sel={'time': tt})
+	for var in ds.vars(d):
+		dims = ds.dims(d, var)
+		for dim in ['height', 'height_2', 'height_3']:
+			if dim in dims:
+				i = dims.index(dim)
+				data = ds.var(d, var)
+				sel = [slice(None)]*data.ndim
+				sel[i] = slice(None, None, -1)
+				data = data[tuple(sel)]
+				ds.var(d, var, data)
+	#convert_float64(d)
+	return d
+
+def read_winds(filename, tt, vars):
+	d = ds.read(filename, vars, sel={'time': tt})
+	for var in ds.vars(d):
+		dims = ds.dims(d, var)
+		if 'alt' in dims:
+			i = dims.index('alt')
+			data = ds.var(d, var)
+			sel = [slice(None)]*data.ndim
+			sel[i] = slice(None, None, -1)
+			data = data[tuple(sel)]
+			ds.var(d, var, data)
+	#convert_float64(d)
+	return d
+
+def calc_e(p, q):
+	return q*p/(0.622 + (1 - 0.622)*q)
+
+def calc_e_is(ta):
+	return np.exp(
+		9.550426 - (5723.265/ta) + 3.53068*np.log(ta) - 0.00728332*ta
+	)
+
+def calc_theta(ta, p, p0=1e5):
+	return ta*(p0/p)**(rd/cpd)
+
+def calc_ustar(umfl_s, vmfl_s, rho):
+	return np.sqrt(np.sqrt(umfl_s**2 + vmfl_s**2)/rho)
+
+def calc_ol(pres_sfc, t_g, shfl_s, ustar):
+	exner = np.exp(rd/cpd*np.log(pres_sfc/p0ref))
+	thetas = t_g/exner
+	return -thetas/ustar**3/(k*g*shfl_s)
+
+def calc_derived_var(icon, winds, opt, out, var, config):
+	ntime = ds.dim(icon, 'time')
+	ncells = ds.dim(icon, 'ncells')
+
+	if var == 'tke_sgs':
+		out[var] = 0.5*(icon['tke'][:,0:-1] + icon['tke'][:,1:])
+		ds.dims(out, var, ['time','height', 'ncells'])
+
+	if var in ['ustar', 'ol']:
+		ustar = calc_ustar(
+			icon['umfl_s'],
+			icon['vmfl_s'],
+			icon['rho'][:,0]
+		)
+
+	if var == 'ustar':
+		out[var] = ustar
+		ds.dims(out, var, ['time', 'ncells'])
+
+	z0 = 0.001 if config['def_z0'] else 9.0e-4
+	z0h = 0.001 if config['def_z0'] else 5.5e-6
+	z0q = z0h
+
+	if var == 'z0':
+		out[var] = np.full((ntime, ncells), z0)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'z0h':
+		out[var] = np.full((ntime, ncells), z0h)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'z0q':
+		out[var] = np.full((ntime, ncells), z0q)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'ol':
+		out[var] = calc_ol(icon['pres_sfc'], icon['t_g'], icon['shfl_s'], ustar)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	dz = icon['z_ifc'][1:] - icon['z_ifc'][:-1]
+
+	if var == 'lwpr':
+		out[var] = np.sum(icon['rho']*icon['qr']*dz, axis=1)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'lwp':
+		out[var] = np.sum(icon['rho']*(icon['qc'] + icon['qr'])*dz, axis=1)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'iwp':
+		out[var] = np.sum(
+			icon['rho']*(icon['qi'] + icon['qs'] + icon['qg'])*dz,
+			axis=1,
+		)
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'pri':
+		out[var] = \
+			icon['ice_gsp_rate'] + \
+			icon['snow_gsp_rate'] + \
+			icon['graupel_gsp_rate']
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'huri':
+		out[var] = calc_e(icon['pres'], icon['qv'])/calc_e_is(icon['temp'])
+		ds.dims(out, var, ['time', 'height', 'ncells'])
+
+	if var == 'theta':
+		out[var] = calc_theta(icon['temp'], icon['pres'])
+		ds.dims(out, var, ['time', 'height', 'ncells'])
+
+	if var == 'tke_res':
+		up = winds['u'] - winds['u'].mean(axis=2)[:,:,None]
+		vp = winds['v'] - winds['v'].mean(axis=2)[:,:,None]
+		wp = winds['w'] - winds['w'].mean(axis=2)[:,:,None]
+		out[var] = (0.5*np.sqrt(up**2 + vp**2 + wp**2)).mean(axis=2)
+		ds.dims(out, var, ['time', 'alt'])
+
+	if var == 'nlcic':
+		# In-cloud droplet number concentration.
+		# Calculate the field mean only where qc > 0.01 g kg-1.
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore", category=RuntimeWarning)
+			out[var] = np.nanmean(np.where(
+				icon['qc'] > 1e-5,
+				icon['qnc'],
+				np.nan
+			), axis=2)
+		ds.dims(out, var, ['time', 'height'])
+
+	if var == 'niic':
+		# In-cloud total ice crystal number concentration.
+		# Computed only where qc > 1e-5 and qi > 1.0e-10.
+		mask = (icon['qc']> 1e-5) & \
+			(icon['qi'] + icon['qs'] + icon['qg'] > 1e-10)
+		with warnings.catch_warnings():
+			warnings.simplefilter("ignore", category=RuntimeWarning)
+			out[var] = np.nanmean(np.where(
+				mask,
+				icon['qni'] + icon['qns'] + icon['qng'],
+				np.nan,
+			), axis=2)
+		ds.dims(out, var, ['time', 'height'])
+
+	if var == 'rlds':
+		out[var] = icon['thu_s'] + icon['thb_s']
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'rlut':
+		out[var] = -1*icon['thb_t']
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'hur':
+		out[var] = winds['rh']*1e-2
+		ds.dims(out, var, ['time', 'alt', 'ncells'])
+
+	if var == 'ua':
+		out[var] = winds['u']
+		ds.dims(out, var, ['time', 'alt', 'ncells'])
+
+	if var == 'va':
+		out['va'] = winds['v']
+		ds.dims(out, 'va', ['time', 'alt', 'ncells'])
+
+	if var == 'us':
+		idx = np.argwhere(winds['alt'] == 10)
+		if len(idx) > 0:
+			out[var] = winds['u'][:,idx[0][0],:]
+			ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'vs':
+		idx = np.argwhere(winds['alt'] == 10)
+		if len(idx) > 0:
+			out[var] = winds['v'][:,idx[0][0],:]
+			ds.dims(out, var, ['time', 'ncells'])
+
+	if var in ['clt', 'od', 'odlc']:
+		out[var] = opt[var]
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'opt':
+		out[var] = opt['od']
+		ds.dims(out, var, ['time', 'ncells'])
+
+	if var == 'alb':
+		out[var] = opt['od']/(opt['od'] + 13)
+		ds.dims(out, var, ['time', 'ncells'])
+
+def vertical_interp(icon, winds, forcing, out):
+	'''Interpolate profile variables from ICON's native vertical grid to the
+	requested vertical grid.'''
+	out['ze'] = forcing['zw_grid'][1:]
+	out['zf'] = 0.5*(forcing['zw_grid'][1:] + forcing['zw_grid'][:-1])
+	ds.dims(out, 'zf', ['zf'])
+	ds.dims(out, 'ze', ['zf'])
+	for dim, z in zip(['height', 'alt'], [icon['z_mc'], winds['alt']]):
+	#for dim, z in zip(['height'], [icon['z_mc']]): #!!!!
+		ds.apply(
+			out,
+			lambda x, sel: np.interp(
+				out['zf'],
+				#out['ze'],#!!!!
+				z[:,sel.get('ncells', 0)] if z.ndim == 2 else z,
+				x,
+				left=np.nan,
+				right=np.nan
+			),
+			dim=dim,
+			with_sel=True,
+		)
+	#ds.select(out, {'alt': np.arange(1, len(winds['alt']))}) #!!!!
+	ds.rename_dim(out, 'height', 'zf')
+	ds.rename_dim(out, 'alt', 'zf')
+
+def horizontal_interp(icon, grid, out):
+	if type_ == 'mean':
+		ds.apply(out, np.mean, dim='ncells')
+	elif type_ == '2d':
+		xg = grid['cell_circumcenter_cartesian_x']
+		yg = grid['cell_circumcenter_cartesian_y']
+		xmin, xmax = np.min(xg), np.max(xg)
+		ymin, ymax = np.min(yg), np.max(yg)
+		n = int(np.sqrt(len(xg)))
+		out['x'] = np.linspace(xmin, xmax, n)
+		ds.dims(out, 'x', ['x'])
+		out['y'] = np.linspace(ymin, ymax, n)
+		ds.dims(out, 'y', ['y'])
+		xm, ym = np.meshgrid(out['x'], out['y'])
+		ds.apply(
+			out,
+			lambda data: scipy.interpolate.griddata((xg, yg), data, (xm, ym)),
+			dim='ncells',
+			newdim=['x', 'y'],
+		)
+
+if __name__ == '__main__':
+	if len(sys.argv) != 3:
+		sys.stderr.write(sys.modules[__name__].__doc__)
+		sys.exit(1)
+	type_ = sys.argv[1]
+	expname = sys.argv[2]
+	main(type_, expname)

@@ -10,6 +10,7 @@ module load parallel nco cdo/2.0.5-gcc-11.2.0
 
 bin/postproc_steps/optdepth mean "$expname"
 #bin/postproc_steps/vsedi "$expname"
-bin/postproc_steps/dephy mean "$comble_vars_mean" "$dir" "$dir/dephy_mean.nc"
+bin/postproc_steps/dephy mean "$expname"
+bin/postproc_steps/dephy 2d "$expname"
 #bin/postproc_steps/add_optdepth mean "$expname"
-bin/postproc_steps/add_optdepth_vsedi mean "$expname"
+#bin/postproc_steps/add_optdepth_vsedi mean "$expname"

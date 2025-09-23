@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-'''Plot 2D cloud fields from ICON LES.
+'''Plot 2D fields from ICON LES.
 
 Usage: plot_clouds INPUT FORCING GRID N OUTPUT
 
 Arguments:
 
-  INPUT    Input file (NetCDF).
-  FORCING  Forcing (NetCDF).
-  GRID     Grid definition (NetCDF).
+  INPUT    Input file (NetCDF). This can be either mean.nc or inst.nc output of ICON, or dephy_mean.nc or dephy_2d.nc output of icon2dephy.
+  FORCING  COMBLE forcing file (NetCDF).
+  GRID     ICON grid definition file (NetCDF).
   N        Time step.
-  OUTPUT   Output file (PDF).
+  OUTPUT   Output plot file (PDF).
 '''
 
 import sys
@@ -40,7 +40,8 @@ mpl.rc('grid', lw=0.1)
 
 VARS = [
 	'time', 'rho', 'alt', 'qc', 'qi', 'qg', 'qr', 'qs', 'w', 'od', 'z_mc',
-	'z_ifc'
+	'z_ifc', 'x', 'y', 'lwp', 'iwp', 'alb', 'opt', 'pr', 'hfls', 'hfss', 'us',
+	'vs', 'ustar'
 ]
 QVARS = ['qc', 'qi', 'qg', 'qr', 'qs']
 
@@ -86,13 +87,13 @@ if __name__ == '__main__':
 	lat = np.interp(t, f['time'], f['lat_ref'])
 	lon = np.interp(t, f['time'], f['lon_ref'])
 
-	x = g['cell_circumcenter_cartesian_x']
-	y = g['cell_circumcenter_cartesian_y']
+	xg = g['cell_circumcenter_cartesian_x']
+	yg = g['cell_circumcenter_cartesian_y']
 
-	xmin = np.min(x)
-	xmax = np.max(x)
-	ymin = np.min(y)
-	ymax = np.max(y)
+	xmin = np.min(xg)
+	xmax = np.max(xg)
+	ymin = np.min(yg)
+	ymax = np.max(yg)
 
 	if zfull is not None and zfull.ndim == 1:
 		dz_g = np.diff(zfull)
@@ -121,11 +122,14 @@ if __name__ == '__main__':
 			tmp[i] = np.sum(d2['w'][:k,i]*dz[:k])/np.sum(dz[:k])
 		d2['w'] = tmp
 
-	on = int(np.sqrt(ds.dim(d, 'ncells')))
-	ox = np.linspace(xmin, xmax, on)
-	oy = np.linspace(ymin, ymax, on)
-
-	xm, ym = np.meshgrid(ox, oy)
+	if 'x' in d and 'y' in d:
+		x = d['x']
+		y = d['y']
+	else:
+		nxy = int(np.sqrt(ds.dim(d, 'ncells')))
+		x = np.linspace(xmin, xmax, nxy)
+		y = np.linspace(ymin, ymax, nxy)
+		xm, ym = np.meshgrid(x, y)
 
 	first = True
 	def plot_field(
@@ -134,10 +138,13 @@ if __name__ == '__main__':
 		cmin, cmax, dc
 	):
 		global first
-		z = scipy.interpolate.griddata((x, y), data, (xm, ym))
+		if 'x' in d and 'y' in d:
+			z = data
+		else:
+			z = scipy.interpolate.griddata((xg, yg), data, (xm, ym))
 		plt.subplot(gs)
 		levels = np.arange(vmin, vmax + dv, dv)
-		plt.contourf(ox*1e-3, oy*1e-3, z,
+		plt.contourf(x*1e-3, y*1e-3, z,
 			alpha=alpha,
 			cmap=cmap,
 			antialiased=True,
@@ -157,7 +164,7 @@ if __name__ == '__main__':
 			plt.xlabel('X (km)')
 			plt.ylabel('Y (km)')
 			plt.title('%s, %.1f°N %.1f°E' % (
-				aq.to_datetime(t).strftime('%Y-%m-%d %H:%M'),
+				aq.to_datetime(t + 1/(60*60*24)).strftime('%Y-%m-%d %H:%M'),
 				lat,
 				lon,
 			), y=0.9)
@@ -198,12 +205,19 @@ if __name__ == '__main__':
 	cmap_g.set_over(cmap_g(1.))
 
 	nrows = \
-		int('qc' in d2) + \
-		int('qp' in d2) + \
+		int('qc' in d2 and 'qi' in d2) + \
+		int('lwp' in d and 'iwp' in d) + \
+		int('pr' in d or 'qp' in d2) + \
 		int('w' in d2) + \
-		int('od' in d)
+		int('opt' in d or 'od' in d) + \
+		int('od' in d or 'alb' in d) + \
+		int('hfls' in d) + \
+		int('hfss' in d) + \
+		int('us' in d) + \
+		int('vs' in d) + \
+		int('ustar' in d)
 
-	if 'qc' in d2 and 'qi' in d2:
+	if 'qc' in d2 and 'qi' in d2 or 'lwp' in d and 'iwp' in d:
 		ncbars = 2
 		width_ratios = [0.82, 0.05, 0.08, 0.05]
 		ncols = 4
@@ -235,13 +249,40 @@ if __name__ == '__main__':
 		)
 		i += ncols
 
+	if 'lwp' in d and 'iwp' in d:
+		plot_field(
+			gs[i], gs[i+1], d['lwp']*1e3,
+			'Liquid water path (g m$^{-2}$)',
+			cmap_r, 0.5,
+			0, 1000, 50,
+			0, 1000, 100,
+		)
+		plot_field(
+			gs[i], gs[i+3], d['iwp']*1e3,
+			'Ice water path (g m$^{-2}$)',
+			cmap_b, 0.5,
+			0, 1000, 50,
+			0, 1000, 100,
+		)
+		i += ncols
+
 	if 'qp' in d2:
 		plot_field(
 			gs[i], gs[i+1], d2['qp']*1e3,
-			'Precipitation (g m$^{-2}$)',
+			'Vert.-int. precipitation (g m$^{-2}$)',
 			cmap_g, 1,
 			0, 2000, 100,
 			0, 2000, 200,
+		)
+		i += ncols
+
+	if 'pr' in d:
+		plot_field(
+			gs[i], gs[i+1], d['pr']*1e6,
+			'Precipitation (mg m$^{-2}$ s$^{-2}$)',
+			cmap_g, 1,
+			0, 1000, 50,
+			0, 1000, 100,
 		)
 		i += ncols
 
@@ -255,8 +296,19 @@ if __name__ == '__main__':
 		)
 		i += ncols
 
-	if 'od' in d:
-		palb = d['od']/(d['od'] + 13)
+	if 'opt' in d or 'od' in d:
+		opt = d['opt'] if 'opt' in d else d['od']
+		plot_field(
+			gs[i], gs[i+1], opt,
+			'Optical depth',
+			cmap_cw, 1,
+			0, 40, 1,
+			0, 40, 5,
+		)
+		i += ncols
+
+	if 'alb' in d or 'od' in d:
+		palb = d['alb'] if 'alb' in d else d['od']/(d['od'] + 13)
 		plot_field(
 			gs[i], gs[i+1], palb,
 			'Pseudo-albedo',
@@ -264,5 +316,66 @@ if __name__ == '__main__':
 			0, 0.9, 0.05,
 			0, 0.9, 0.1,
 		)
+		i += ncols
+
+	if 'hfss' in d:
+		plot_field(
+			gs[i], gs[i+1], d['hfss'],
+			'Surface sensible heat flux (W m$^{-2}$)',
+			cmap_r, 1,
+			0, 500, 10,
+			0, 500, 50,
+		)
+		i += ncols
+
+	if 'hfls' in d:
+		plot_field(
+			gs[i], gs[i+1], d['hfls'],
+			'Surface latent heat flux (W m$^{-2}$)',
+			cmap_r, 1,
+			0, 500, 10,
+			0, 500, 50,
+		)
+		i += ncols
+
+	if 'us' in d:
+		us0 = np.nanmean(d['us'])
+		plot_field(
+			gs[i], gs[i+1], d['us'] - us0,
+			'Surf. eastward wind anomaly (m s$^{-1}$)',
+			cmap_cw, 1,
+			-8, 8, 0.5,
+			-8, 8, 1,
+		)
+		plt.text(0.5, 0.94, '$\\bar{u}$ = %.1f m s$^{-1}$' % us0,
+			transform=plt.gca().transAxes,
+			ha='center',
+		)
+		i += ncols
+
+	if 'vs' in d:
+		vs0 = np.nanmean(d['vs'])
+		plot_field(
+			gs[i], gs[i+1], d['vs'] - vs0,
+			'Surf. northward wind anomaly (m s$^{-1}$)',
+			cmap_cw, 1,
+			-8, 8, 0.5,
+			-8, 8, 1,
+		)
+		plt.text(0.5, 0.94, '$\\bar{v}$ = %.1f m s$^{-1}$' % vs0,
+			transform=plt.gca().transAxes,
+			ha='center',
+		)
+		i += ncols
+
+	if 'ustar' in d:
+		plot_field(
+			gs[i], gs[i+1], d['ustar'],
+			'Surface friction velocity (m s$^{-1}$)',
+			cmap_g, 1,
+			0, 1, 0.1,
+		 	0, 1, 0.2,
+		)
+		i += ncols
 
 	plt.savefig(output, bbox_inches='tight', dpi=300)

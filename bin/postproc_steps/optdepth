@@ -5,20 +5,18 @@ set -ex
 type_=$1
 expname=$2
 
-. "exp/$expname"
-
+dir=opt_${type_}
+input="${type_}.nc"
+output=opt_$type_.nc
 cmd=$(realpath src/postproc/compute_optdepth)
 calc_z_ifc=$(realpath bin/calc_z_ifc)
 
+. "exp/$expname"
+
 cd runs/${expname}
-
-dir=opt_${type_}
-
 mkdir -p "$dir"
 
 [[ $expname == *noice* ]] && l_ice=false || l_ice=true
-
-input="${type_}.nc"
 
 te=$(ds dim time "$input")
 
@@ -62,3 +60,6 @@ p ncatted -O -a units,od,o,c,"1" "$dir/opt_2d_{}.nc"
 p ncatted -O -a long_name,clt,o,c,"cloud_area_fraction" \
 	"$dir/opt_2d_{}.nc"
 p ncatted -O -a units,clt,o,c,"1" "$dir/opt_2d_{}.nc"
+
+files=$(for ((i=0;i<te;i++)); do echo "$dir/opt_2d_$i.nc"; done)
+cdo -O mergetime $files "$output"
