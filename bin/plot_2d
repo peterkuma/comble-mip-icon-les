@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''Plot 2D fields from ICON LES.
 
-Usage: plot_clouds INPUT FORCING GRID N OUTPUT
+Usage: plot_2d INPUT FORCING GRID N OUTPUT
 
 Arguments:
 
