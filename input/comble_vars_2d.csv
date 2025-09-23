@@ -1,0 +1,15 @@
+name,standard_name,units,dims,icon_name
+time,time,s,time,time
+x,x,m,x,
+y,y,m,y,
+hfss,surface_upward_sensible_heat_flux,W m-2,"time,x,y",shfl_s
+hfls,surface_upward_latent_heat_flux,W m-2,"time,x,y",lhfl_s
+ustar,surface_friction_velocity,m s-1,"time,x,y",
+us,surface_eastward_wind,m s-1,"time,x,y",u_10m
+vs,surface_northward_wind,m s-1,"time,x,y",v_10m
+pr,precipitation_flux_at_surface,kg m-2 s-1,"time,x,y",tot_prec_rate
+lwp,atmosphere_mass_content_of_liquid_water,kg m-2,"time,x,y",
+iwp,atmosphere_mass_content_of_ice,kg m-2,"time,x,y",
+opt,atmosphere_optical_thickness,1,"time,x,y",
+alb,pseudo-albedo,1,"time,x,y",
+olr11,toa_outgoing_longwave_flux_atmospheric_window,K,"time,x,y",

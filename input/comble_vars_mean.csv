@@ -1,0 +1,75 @@
+name,standard_name,units,dims,icon_name
+time,time,s,time,time
+zf,height,m,zf,
+ze,layer_top_height,m,ze,
+ps,surface_pressure,Pa,time,pres_sfc
+ts,surface_temperature,K,time,t_g
+ustar,surface_friction_velocity,m s-1,time,
+z0,surface_roughness_length_for_momentum_in_air,m,time,
+z0h,surface_roughness_length_for_heat_in_air,m,time,
+z0q,surface_roughness_length_for_humidity_in_air,m,time,
+hfss,surface_upward_sensible_heat_flux,W m-2,time,shfl_s
+hfls,surface_upward_latent_heat_flux,W m-2,time,lhfl_s
+ol,obukhov_length,m,time,
+lwpc,atmosphere_mass_content_of_liquid_cloud_water,kg m-2,time,tqc
+lwpr,atmosphere_mass_content_of_rain_water,kg m-2,time,
+iwp,atmosphere_mass_content_of_ice_water,kg m-2,time,
+clt,cloud_area_fraction,1,time,
+od,optical_depth,1,time,
+odlc,optical_depth_of_liquid_cloud,1,time,
+pr,precipitation_flux_at_surface,kg m-2 s-1,time,tot_prec_rate
+pri,precipitation_flux_at_surface_in_ice_phase,kg m-2 s-1,time,
+rlut,toa_outgoing_longwave_flux,W m-2,time,
+rlds,surface_downwelling_longwave_flux,W m-2,time,
+rlus,surface_upwelling_longwave_flux,W m-2,time,thu_s
+ssaf,surface_sea_spray_number_flux,m-2 s-1,time,
+pa,air_pressure,Pa,"time,zf",pres
+ua,eastward_wind,m s-1,"time,zf",
+va,northward_wind,m s-1,"time,zf",
+rhoa,air_dry_density,kg m-3,"time,zf",rho
+ta,air_temperature,K,"time,zf",temp
+qv,water_vapor_mixing_ratio,kg kg-1,"time,zf",qv
+hur,relative_humidity,1,"time,zf",
+huri,relative_humidity_over_ice,1,"time,zf",
+theta,air_potential_temperature,K,"time,zf",
+tke_res,specific_turbulent_kinetic_energy_resolved,m2 s-2,"time,zf",
+tke_sgs,specific_turbulent_kinetic_energy_sgs,m2 s-2,"time,zf",
+qlc,mass_mixing_ratio_of_cloud_liquid_water_in_air,kg kg-1,"time,zf",qc
+qlr,mass_mixing_ratio_of_rain_water_in_air,kg kg-1,"time,zf",qr
+qic,mass_mixing_ratio_of_cloud_ice_in_air,kg kg-1,"time,zf",qi
+qis,mass_mixing_ratio_of_snow_in_air,kg kg-1,"time,zf",qs
+qig,mass_mixing_ratio_of_graupel_in_air,kg kg-1,"time,zf",qg
+nlc,number_of_liquid_cloud_droplets_in_air,kg-1,"time,zf",qnc
+nlr,number_of_rain_drops_in_air,kg-1,"time,zf",qnr
+nic,number_of_cloud_ice_crystals_in_air,kg-1,"time,zf",qni
+nis,number_of_snow_crystals_in_air,kg-1,"time,zf",qns
+nig,number_of_graupel_crystals_in_air,kg-1,"time,zf",qng
+na1,number_of_total_aerosol_mode1,kg-1,"time,zf",
+na2,number_of_total_aerosol_mode2,kg-1,"time,zf",nccn
+na3,number_of_total_aerosol_mode3,kg-1,"time,zf",
+nlcic,number_of_liquid_cloud_droplets_in_cloud,kg-1,"time,zf",
+niic,number_of_ice_crystals_in_cloud,kg-1,"time,zf",
+eps,dissipation_rate_of_turbulent_kinetic_energy,m2 s-3,"time,zf",
+uw,zonal_momentum_flux,m2 s-2,"time,zf",
+vw,meridional_momentum_flux,m2 s-2,"time,zf",
+w2,variance_of_upward_air_velocity,m2 s-2,"time,zf",
+wth,vertical_flux_potential_temperature,K m s-1,"time,zf",
+vf_thli,vertical_flux_liquid_ice_water_potential_temperature,K m s-1,"time,zf",
+wqv,vertical_flux_water_vapor,kg kg-1 m s-1,"time,zf",
+vf_qt,vertical_flux_total_water,kg kg-1 m s-1,"time,zf",
+flc,area_fraction_of_liquid_cloud,1,"time,zf",
+prf,precipitation_flux_in_air,kg m-2 s-1,"time,zf",
+prfi,precipitation_flux_in_air_in_ice_phase,kg m-2 s-1,"time,zf",
+rld,downwelling_longwave_flux_in_air,W m-2,"time,zf",
+rlu,upwelling_longwave_flux_in_air,W m-2,"time,zf",
+dth_rad,tendency_of_air_potential_temperature_due_to_radiative_heating,K s-1,"time,zf",
+dth_micro,tendency_of_air_potential_temperature_due_to_microphysics,K s-1,"time,zf",
+dth_turb,tendency_of_air_potential_temperature_due_to_mixing,K s-1,"time,zf",
+dq_micro,tendency_of_water_vapor_mixing_ratio_due_to_microphysics,kg kg-1 s-1,"time,zf",
+dq_turb,tendency_of_water_vapor_mixing_ratio_due_to_mixing,kg kg-1 s-1,"time,zf",
+dna_micro_warm,tendency_of_aerosol_number_due_to_warm_microphysics,kg-1 s-1,"time,zf",
+dna_micro_cold,tendency_of_aerosol_number_due_to_cold_microphysics,kg-1 s-1,"time,zf",
+dna_turb,tendency_of_aerosol_number_due_to_mixing,kg-1 s-1,"time,zf",
+dni_het,tendency_of_ice_number_due_to_heterogeneous_freezing,kg-1 s-1,"time,zf",
+dni_sip,tendency_of_ice_number_due_to_secondary_ice_production,kg-1 s-1,"time,zf",
+dni_hom,tendency_of_ice_number_due_to_homogeneous_freezing,kg-1 s-1,"time,zf",
