@@ -1,6 +1,6 @@
 # ICON COMBLE MIP
 
-Author: [Peter Kuma](peter@peterkuma.net) based on code inherited from [Anna
+Author: [Peter Kuma](mailto:peter@peterkuma.net) based on code inherited from [Anna
 Possner](mailto:apossner@iau.uni-frankfurt.de).
 
 ## Overview
@@ -217,7 +217,7 @@ repository](https://github.com/ARM-Development/comble-mip/).
 
 As of 23 Sep 2025, there is an ongoing discussion with [Gaurav
 Dogra](mailto:gaurav.dogra@ipsl.fr) and [Tomi
-Raatikainen](Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
+Raatikainen](mailto:Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
 simulations for COMBLE MIP. They should be using their respective models for the
 simulation.
 
