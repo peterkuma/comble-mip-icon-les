@@ -29,7 +29,7 @@ Anna's original files for the COMBLE MIP experiment are under:
 - `/home/b/b380903/code/ICON_DWD_NWP_DEPHY_FixN/icon-nwp`: ICON code.
 - `/work/bb1358/possnera/COMBLE`: Run scripts, namelists, input files, and
 simulation output.
-`/home/b/b380903/postproc/COMBLE`: Postprocessing.
+- `/home/b/b380903/postproc/COMBLE`: Postprocessing.
 
 This repository inherits from the above, but the process is more consolidated,
 various fixes have been applied to the ICON source code (Section "ICON source
@@ -255,6 +255,9 @@ are some additional files/plots produced for the former, mostly for testing
 purposes only.
 
 The `plots` directory contains some old plots.
+
+The `map` directory contains code and data for plotting a map as in the poster
+referenced above.
 
 ## Contact
 
