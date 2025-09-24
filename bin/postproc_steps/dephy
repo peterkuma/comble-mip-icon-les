@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 '''Convert ICON LES output to DEPHY format.
 
+The purpose of this program is to produce DEPHY output for mean and 2D COMBLE MIP output from the ICON model output. Some variables are taken directly from the ICON model output, whereas other have to be derived. The output variables are defined in CSV files input/comble_vars_*.csv.
+
 Usage: dephy TYPE EXPNAME
 
 Arguments:
@@ -30,16 +32,19 @@ cpd = 1004.64  # Heat capcity of dry air at constant presssure (J kg-1 K-1).
 p0ref = 100000.0  # Atmospheric reference pressure (Pa).
 delt = 60.0  # Conversion of minutes to seconds (s min-1).
 
-#NJOBS = 32
-NJOBS = 1
+# Number of parallel jobs.
+NJOBS = 32
 
+# Prefix of the input NetCDF file based on the DEPHY output type.
 PREFIX = {
 	'mean': 'mean',
 	'2d': 'inst',
 }
 
+# Default ICON variables always required.
 DEF_ICON_VARS = ['time', 'z_ifc', 'z_mc']
 
+# ICON variables required for the calculation of derived variables.
 REQ_ICON_VARS = {
 	'huri': ['pres', 'qv', 'temp'],
 	'iwp': ['rho', 'qi', 'qs', 'qg'],
@@ -58,8 +63,10 @@ REQ_ICON_VARS = {
 	'vs': ['v_10m'],
 }
 
+# Default optical depth variables always required.
 DEF_OPT_VARS = ['time']
 
+# Optical depth variables required for the calculation of derived variables.
 REQ_OPT_VARS = {
 	'alb': ['od'],
 	'clt': ['clt'],
@@ -68,8 +75,10 @@ REQ_OPT_VARS = {
 	'opt': ['od'],
 }
 
+# Default wind variables always required.
 DEF_WIND_VARS = ['alt']
 
+# Wind variables required for the calculation of derived variables.
 REQ_WIND_VARS = {
 	'hur': ['rh'],
 	'tke_res': ['u', 'v', 'w'],
@@ -79,10 +88,13 @@ REQ_WIND_VARS = {
 	'vs': ['v'],
 }
 
+# Grid variables required.
 GRID_VARS = ['cell_circumcenter_cartesian_x', 'cell_circumcenter_cartesian_y']
 
+# Forcing file variables required.
 FORCING_VARS = ['zw_grid']
 
+# DEPHY metadata for the NetCDF output.
 DEPHY_ATTRIBUTES = {
 	'title': 'ICON LES results for COMBLE-MIP case',
 	'reference': 'https://github.com/ARM-Development/comble-mip',
@@ -109,6 +121,13 @@ COMMENT_NOICE = 'ICON has an icosahedral grid. To imitate Lx25_dx100 as closely 
 ALT_PROGNA = 'The simulation uses prescribed initial single-mode CCN profile (N_a = 105.5 cm-3, D_g = 0.14 um, sigma_g = 1.6 um, soluble fraction eta_s = 0.9, kappa not used) up to 10 km and exponentially decaying above. The CCN is depleted by cloud droplet formation during the simulation and relaxed back to the initial profile. No sea spray emissions are used. Default model INP is used.'
 
 def main(type_, expname):
+	'''This function performs the conversion of the ICON model output to DEPHY
+	for the mean or 2D output type. It reads a list of output variable from CSV
+	files, the ICON model output and grid, COMBLE MIP forcing. A calculation of
+	derived variables is perfomed. Time steps are split into chunks are
+	processed in parallel. In each worker process, variables are converted one
+	at a time for memory efficiency reasons. Lastly, vertical and horizontal
+	interpolation is perfomed.'''
 	dirname = os.path.join('runs', expname)
 	prefix = PREFIX[type_]
 	config = {
@@ -132,6 +151,7 @@ def main(type_, expname):
 	d = ds.read(config['icon_file'], [], full=True)
 	ntime = ds.dim(d, 'time', full=True)
 	ncells = ds.dim(d, 'ncells', full=True)
+	# Chunks of time steps for parallel processing.
 	chunk_size = 2*max(1, round(3200/ncells))
 
 	with ProcessPoolExecutor(max_workers=NJOBS) as ex:
@@ -143,6 +163,7 @@ def main(type_, expname):
 		)
 		tt = list(range(ntime))
 		args = [tt[i:i+chunk_size] for i in range(0, ntime, chunk_size)]
+		# Process all time step chunks in parallel.
 		res = list(ex.map(task, args))
 
 	out = ds.merge(res, 'time')
@@ -163,6 +184,8 @@ def main(type_, expname):
 	ds.write(config['output_file'], out)
 
 def process_timesteps(tt, comble, grid, forcing, config):
+	'''Process a chunk of time steps. This calculates derived variables and
+	performs vertical and horizontal interpolation.'''
 	out = {}
 	for var, icon_name in zip(comble['name'], comble['icon_name']):
 		out1 = {}
@@ -205,6 +228,7 @@ def convert_float64(d):
 			ds.var(d, var, data.astype(np.float64))
 
 def read_icon(filename, tt, vars):
+	'''Read ICON variables for a chunk of time steps.'''
 	d = ds.read(filename, vars, sel={'time': tt})
 	for var in ds.vars(d):
 		dims = ds.dims(d, var)
@@ -220,6 +244,7 @@ def read_icon(filename, tt, vars):
 	return d
 
 def read_winds(filename, tt, vars):
+	'''Read wind variables for a chunk of time steps.'''
 	d = ds.read(filename, vars, sel={'time': tt})
 	for var in ds.vars(d):
 		dims = ds.dims(d, var)
@@ -242,17 +267,21 @@ def calc_e_is(ta):
 	)
 
 def calc_theta(ta, p, p0=1e5):
+	'''Calculate potential temperature.'''
 	return ta*(p0/p)**(rd/cpd)
 
 def calc_ustar(umfl_s, vmfl_s, rho):
+	'''Calculate surface friction velocity.'''
 	return np.sqrt(np.sqrt(umfl_s**2 + vmfl_s**2)/rho)
 
 def calc_ol(pres_sfc, t_g, shfl_s, ustar):
+	'''Calculate Obukhov length.'''
 	exner = np.exp(rd/cpd*np.log(pres_sfc/p0ref))
 	thetas = t_g/exner
 	return -thetas/ustar**3/(k*g*shfl_s)
 
 def calc_derived_var(icon, winds, opt, out, var, config):
+	'''Calculate a derived variable.'''
 	ntime = ds.dim(icon, 'time')
 	ncells = ds.dim(icon, 'ncells')
 
@@ -427,6 +456,7 @@ def vertical_interp(icon, winds, forcing, out):
 	ds.rename_dim(out, 'alt', 'zf')
 
 def horizontal_interp(icon, grid, out):
+	'''Interpolate output variables horizontally.'''
 	if type_ == 'mean':
 		ds.apply(out, np.mean, dim='ncells')
 	elif type_ == '2d':
