@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+
+import ds_format as ds
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import matplotlib as mpl
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import shapely.geometry as sgeom
+from matplotlib.colors import LinearSegmentedColormap
+
+mpl.rc('font', family='Open Sans')
+mpl.rc('axes', linewidth=0.3)
+#mpl.rc('axes', grid=True)
+mpl.rc('lines', linewidth=1.2)
+mpl.rc('xtick.major', width=0.3)
+mpl.rc('ytick.major', width=0.3)
+mpl.rc('legend', framealpha=1)
+mpl.rc('legend', facecolor='white')
+mpl.rc('legend', edgecolor='none')
+mpl.rc('legend', fancybox=False)
+mpl.rc('legend', fontsize=8)
+mpl.rc('grid', color='k')
+mpl.rc('grid', alpha=0.2)
+mpl.rc('grid', lw=0.1)
+
+LOCS = [
+	[64.1307, -21.8855, 'Reykjavík'],
+	[64.17678, -51.72578, 'Nuuk'],
+]
+
+LOCS_HIGHLIGHT = [
+	[78.92558, 11.93029, 'Ny-Ålesund'],
+	[75, 19, 'Bjørnøya'],
+	[69, 16, 'Andenes'],
+]
+
+LOCS_SEA = [
+	[69.68, -3.16, 'Norwegian\nSea'],
+]
+
+SEA_ICE_FILENAME = 'era5_sea_ice_2020-03-28T12:00.nc'
+FORCING_FILENAME = 'COMBLE_INTERCOMPARISON_FORCING_V2.5.nc'
+OUTPUT_FILENAME = 'map.pdf'
+
+def plot_map():
+	pc = ccrs.PlateCarree()
+	np = ccrs.NorthPolarStereo()
+	fig = plt.figure()
+	ax = fig.add_subplot(1, 1, 1, projection=np)
+	ax.set_extent([-180, 180, 60, 90], crs=pc)
+	ax.add_feature(cfeature.LAND,
+		zorder=1,
+		facecolor='#e0e0e0',
+		edgecolor='#666666',
+		lw=0.1,
+	)
+	gl = ax.gridlines(
+		crs=pc,
+		draw_labels=True,
+		lw=0.1,
+		color='k',
+		alpha=0.1,
+	)
+	gl.xlabels_top = False
+	gl.xlabels_bottom = False
+	gl.ylabel_style = {'size': 6 }
+
+	return ax, pc
+
+def plot_track(ax, pc):
+	d = ds.read(
+		FORCING_FILENAME,
+		['lat_ref', 'lon_ref']
+	)
+	lon = d['lon_ref']
+	lat = d['lat_ref']
+
+	track = sgeom.LineString(zip(lon, lat))
+	ax.add_geometries(
+		[track],
+		pc,
+		facecolor='none',
+		edgecolor='red',
+		lw=0.5,
+	)
+	i = len(lon)//2 + 1
+	ax.annotate('',
+		xy=(lon[i], lat[i]),
+		xytext=(lon[i-1], lat[i-1]),
+		arrowprops=dict(arrowstyle='->', color='red', lw=0.5),
+		transform=pc,
+		color='red'
+	)
+	
+def plot_locs(ax, pc):
+	def plot_loc(lon, lat, title, hl=False, sea=False):
+		if not sea:
+			ax.scatter([lon], [lat],
+				transform=pc,
+				s=(10 if hl else 3),
+				lw=0.5,
+				color=('red' if hl else 'k'),
+				facecolor=('none' if hl else 'k')
+			)
+		ax.annotate(title,
+			xy=(lon, lat),
+			xycoords='data',
+			xytext=(2, 2),
+			textcoords='offset points',
+			transform=pc,
+			fontsize=6,
+			color=('white' if sea else 'k'),
+			fontstyle=('italic' if sea else 'normal'),
+			ha=('center' if sea else 'left'),
+			va=('center' if sea else 'bottom'),
+			zorder=100,
+		)
+
+	for lat, lon, title in LOCS:
+		plot_loc(lon, lat, title)
+
+	for lat, lon, title in LOCS_HIGHLIGHT:
+		plot_loc(lon, lat, title, hl=True)
+
+	for lat, lon, title in LOCS_SEA:
+		plot_loc(lon, lat, title, hl=False, sea=True)
+
+def plot_sea_ice(ax, pc):
+	d = ds.read(SEA_ICE_FILENAME)
+	lon = d['longitude']
+	lat = d['latitude']
+	sic = d['siconc'][0,:,:]
+	cmap = LinearSegmentedColormap.from_list('sic', ['#0045c4', 'white'])
+	plt.contourf(lon, lat, sic*100,
+		cmap=cmap,
+		transform=pc,
+		levels=np.linspace(0, 100, 11),
+		zorder=-1,
+	)
+	cb = plt.colorbar(
+		shrink=0.5,
+		pad=0.03,
+	)
+	cb.set_label(label='Sea ice concentration (%)', fontsize=8)
+	for t in cb.ax.get_yticklabels():
+		t.set_fontsize(8)
+	
+def plot_legend(ax, pc):
+	line = mlines.Line2D([], [], color='red', label='LES track')
+	ax.legend(handles=[line], loc='upper left')
+
+if __name__ == '__main__':
+	ax, pc = plot_map()
+	plot_track(ax, pc)
+	plot_locs(ax, pc)
+	plot_sea_ice(ax, pc)
+	plot_legend(ax, pc)
+	plt.title('2020-03-28', fontsize=10, y=0.93)
+	plt.savefig(OUTPUT_FILENAME, bbox_inches='tight')
