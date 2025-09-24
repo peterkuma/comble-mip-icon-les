@@ -1,11 +1,12 @@
 # ICON COMBLE MIP
 
-Author: [Peter Kuma](mailto:peter@peterkuma.net) based on code inherited from [Anna
-Possner](mailto:apossner@iau.uni-frankfurt.de).
+Author: [Peter Kuma](mailto:peter@peterkuma.net) based on code inherited from
+[Anna Possner](mailto:apossner@iau.uni-frankfurt.de).
 
 ## Overview
 
-This repository contains files for running the [COMBLE MIP
+This repository (`/home/b/b381672/prj/comble-mip`) contains files for running
+the [COMBLE MIP
 experiments](https://arm-development.github.io/comble-mip/README.html) with ICON
 LES.
 
@@ -222,19 +223,19 @@ simulations for COMBLE MIP. They should be using their respective models for the
 simulation.
 
 Anna has wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
-experiments. The code is supposedly somewhere in the same directory as FixN in
-Anna's COMBLE MIP files.
+experiments. The code is located in the [ICON
+MICRO](https://github.com/apossner/ICON_MICRO) repository.
 
 The **ProgNa** and **ProgNaNi** may also need some additional work and checks
 before submitting to COMBLE MIP regarding how diagnostic and prognostic ice
 should be specified.
 
 The SIP experiments should be conducted with the SIP implementation as in the
-[ICON MICRO](https://github.com/apossner/ICON_MICRO) repository produced by Anna
-and Kevin Pfannkuch. [Another version](https://github.com/peterkuma/ICON_MICRO)
-of the repository exists, which also includes the whole Git history of ICON as on
-the DKRZ GitLab. Both of these repositories are private and require an invite.
-Contact [Peter Kuma](mailto:peter@peterkuma.net) or Anna.
+ICON MICRO repository produced by Anna and Kevin Pfannkuch. [Another
+version](https://github.com/peterkuma/ICON_MICRO) of the repository exists,
+which also includes the whole Git history of ICON as on the DKRZ GitLab. Both of
+these repositories are private and require an invite. Contact [Peter
+Kuma](mailto:peter@peterkuma.net) or Anna.
 
 ## Other stuff
 
@@ -258,6 +259,18 @@ The `plots` directory contains some old plots.
 
 The `map` directory contains code and data for plotting a map as in the poster
 referenced above.
+
+## File systems and symlink
+
+Due practical differences between the Levante file systems, this repository is
+split across multiple filesystems. The main parts such as the code under `bin`
+are located on the **HOME** file system. The `runs` directory is located on
+**SCRATCH** under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A
+copy of runs which are not periodically deleted is located on the **WORK**
+filesystem under `/work/bb1311/peter/comble-mip/runs` (symlink from
+`runs_work`). For space reasons, the ICON code repositories under
+`src/ICON_DWD_NWP_DEPHY` are symlinks to the **WORK**k filesystem under
+`/work/bb1311/peter/comble-mip/src/ICON_DWD_NWP_DEPHY/`.
 
 ## Contact
 
