@@ -448,7 +448,7 @@ def vertical_interp(icon, winds, forcing, out):
 				left=np.nan,
 				right=np.nan
 			),
-			dim=dim,
+			dims=dim,
 			with_sel=True,
 		)
 	#ds.select(out, {'alt': np.arange(1, len(winds['alt']))}) #!!!!
@@ -458,7 +458,7 @@ def vertical_interp(icon, winds, forcing, out):
 def horizontal_interp(icon, grid, out):
 	'''Interpolate output variables horizontally.'''
 	if type_ == 'mean':
-		ds.apply(out, np.mean, dim='ncells')
+		ds.apply(out, np.mean, dims='ncells')
 	elif type_ == '2d':
 		xg = grid['cell_circumcenter_cartesian_x']
 		yg = grid['cell_circumcenter_cartesian_y']
@@ -473,8 +473,8 @@ def horizontal_interp(icon, grid, out):
 		ds.apply(
 			out,
 			lambda data: scipy.interpolate.griddata((xg, yg), data, (xm, ym)),
-			dim='ncells',
-			newdim=['x', 'y'],
+			dims='ncells',
+			newdims=['x', 'y'],
 		)
 
 if __name__ == '__main__':
