@@ -19,9 +19,9 @@ The following experiments are supported:
   description of the alt case]
 
 Some information about the ICON runs for the COMBLE MIP is in the poster
-[Exploring sensitivity to ice nucleating particles and secondary ice production
+"[Exploring sensitivity to ice nucleating particles and secondary ice production
 during COMBLE in idealised ICON large eddy
-simulations](https://zenodo.org/records/15174379).
+simulations](https://zenodo.org/records/15174379)".
 
 ## Anna's files
 
@@ -171,10 +171,10 @@ Some ancillary input files are stored under `input`:
 
 ## ICON source code
 
-The ICON model source code is located under `src/ICON_DWD_NWP_DEPHY`. Each
-of the main experiments has its own branch in its own subdirectory. The
-directory `src/ICON_DWD_NWP_DEPHY/bare` is a bare Git repository that is
-shared for all of them and can be pushed into with `git push origin` *branch*
+The ICON model source code is located under `src/ICON_DWD_NWP_DEPHY`. Each of
+the main experiments has its own branch in its own subdirectory. The directory
+`src/ICON_DWD_NWP_DEPHY/bare` is a bare Git repository (`git init --bare`) that
+is shared for all of them and can be pushed into with `git push origin` *branch*
 from each of the experiment ICON source code subdirectories.
 
 - `bare`: Git "bare" repository in which all of the branches for the experiments
@@ -204,6 +204,11 @@ from each of the experiment ICON source code subdirectories.
   needs some more attention before it complies with the COMBLE MIP requirements
   for the experiment.
 
+The repositories above contain Git remote-tracking branches that they "inherit"
+code from (these can be listed with `git branch`). The required commits were
+transferred with `git cherry-pick` from the remote-tracking branches. The bare
+repository contains all of the branches.
+
 ## Submission
 
 The `submission` directory contains the final ICON model output files as
@@ -214,6 +219,33 @@ the metadata correctly, and `bin/set_dephy_meta` does not need to be applied. Th
 files under `submission` have been committed to the [COMBLE MIP GitHub
 repository](https://github.com/ARM-Development/comble-mip/).
 
+## Secondary ice production
+
+Merging of the SIP processes in the two-moment microphysics scheme is work in
+progress. The repository for SIP is in `src/ICON_DWD_NWP_DEPHY/SIP`. The SIP
+experiments should be conducted with the SIP implementation as in the [ICON
+MICRO](https://github.com/apossner/ICON_MICRO) repository developed by Anna and
+Kevin Pfannkuch. [Another version](https://github.com/peterkuma/ICON_MICRO) of
+the repository exists, which also includes the whole Git history of ICON as on
+the DKRZ GitLab. Both of these repositories are private and require an invite.
+Contact [Peter Kuma](mailto:peter@peterkuma.net) or Anna.
+
+The ICON MICRO repository uses an older version of ICON than ICON for the COMBLE
+MIP experiments. Therefore, the SIP-related changes in ICON MICRO need to be
+ported into the COMBLE MIP ICON version. The main files which need to be merged
+are `src/atm_phy_schemes/mo_2mom_mcrph_main.f90` and
+`src/atm_phy_schemes/mo_2mom_mcrph_processes.f90`. The porting is already done
+for these two files, but not tested in any way, and not even checked if they
+compile. The changes are marked with the comment "! ICON_MICRO:", and can also
+be seen with `git diff` (or `git diff -w`) in the SIP repository. It is possible
+that other files will also require porting to make this work. Diffs for
+`mo_2mom_mcrph_main.f90` and `mo_2mom_mcrph_processes.f90` which show changes
+done in ICON MICRO compared to its ICON baseline version are in the files
+`mo_2mom_mcrph_main.diff` and `mo_2mom_mcrph_processes.diff` under `SIP`.
+Because the indentation and whitespace has been changed in arbitrary ways in the
+ICON MICRO repository, it is not trivial to compare using diff. The above diffs
+show differences after indentation is normalised with `findent -i 2`.
+
 ## TODO
 
 As of 23 Sep 2025, there is an ongoing discussion with [Gaurav
@@ -223,19 +255,11 @@ simulations for COMBLE MIP. They should be using their respective models for the
 simulation.
 
 Anna has wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
-experiments. The code is located in the [ICON
-MICRO](https://github.com/apossner/ICON_MICRO) repository.
+experiments. The code is located in the ICON MICRO repository.
 
 The **ProgNa** and **ProgNaNi** may also need some additional work and checks
 before submitting to COMBLE MIP regarding how diagnostic and prognostic ice
 should be specified.
-
-The SIP experiments should be conducted with the SIP implementation as in the
-ICON MICRO repository produced by Anna and Kevin Pfannkuch. [Another
-version](https://github.com/peterkuma/ICON_MICRO) of the repository exists,
-which also includes the whole Git history of ICON as on the DKRZ GitLab. Both of
-these repositories are private and require an invite. Contact [Peter
-Kuma](mailto:peter@peterkuma.net) or Anna.
 
 ## Other stuff
 
@@ -260,7 +284,7 @@ The `plots` directory contains some old plots.
 The `map` directory contains code and data for plotting a map as in the poster
 referenced above.
 
-## File systems and symlink
+## File systems and symlinks
 
 Due practical differences between the Levante file systems, this repository is
 split across multiple filesystems. The main parts such as the code under `bin`
