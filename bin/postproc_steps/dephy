@@ -183,6 +183,12 @@ def main(type_, expname):
 		ds.attr(out, 'alt', ALT_PROGNA)
 	ds.write(config['output_file'], out)
 
+def require_vars(d, vars):
+	for var in vars:
+		if var not in ds.vars(d):
+			return False
+	return True
+
 def process_timesteps(tt, comble, grid, forcing, config):
 	'''Process a chunk of time steps. This calculates derived variables and
 	performs vertical and horizontal interpolation.'''
@@ -197,6 +203,10 @@ def process_timesteps(tt, comble, grid, forcing, config):
 		icon = read_icon(config['icon_file'], tt, req_icon_vars)
 		winds = read_winds(config['winds_file'], tt, req_wind_vars)
 		opt = ds.read(config['opt_file'], req_opt_vars, sel={'time': tt})
+
+		if not require_vars(icon, req_icon_vars): continue
+		if not require_vars(winds, req_wind_vars): continue
+		if not require_vars(opt, req_opt_vars): continue
 
 		if icon_name != '' and icon_name in ds.vars(icon):
 			data = ds.var(icon, icon_name)

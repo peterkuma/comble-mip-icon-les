@@ -9,8 +9,9 @@ comble_vars_mean=input/comble_vars_mean.csv
 module load parallel nco cdo/2.0.5-gcc-11.2.0
 
 bin/postproc_steps/optdepth mean "$expname"
-#bin/postproc_steps/vsedi "$expname"
+bin/postproc_steps/optdepth inst "$expname"
+##bin/postproc_steps/vsedi "$expname"
 bin/postproc_steps/dephy mean "$expname"
 bin/postproc_steps/dephy 2d "$expname"
-#bin/postproc_steps/add_optdepth mean "$expname"
-#bin/postproc_steps/add_optdepth_vsedi mean "$expname"
+##bin/postproc_steps/add_optdepth mean "$expname"
+##bin/postproc_steps/add_optdepth_vsedi mean "$expname"

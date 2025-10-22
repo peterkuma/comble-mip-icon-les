@@ -68,7 +68,7 @@ plot_runs)
         fi
         if [[ -e $r/dephy_2d.nc ]]; then
             src=($r/dephy_2d.nc $r/init_SCM.nc $r/grid.nc)
-            dist=$r/2d.pdf
+            dst=$r/2d.pdf
             newer || cmd bin/plot_2d \
                 $r/dephy_2d.nc $r/init_SCM.nc $r/grid.nc 120 $dst
         fi
@@ -88,6 +88,10 @@ plot_mip)
     done
     ;;
 
+sync_runs)
+    rsync -av runs/ runs_work/
+    ;;
+
 *)
     cat <<EOF
 Usage: $0 [-f] COMMAND
@@ -96,6 +100,7 @@ Available commands:
 
   plot_runs  Plot timeseries and curtain of all runs under runs.
   plot_mip   Plot timeseries and curtain of all models under arm-comble-mip/les_output.
+  sync_runs  Synchronize runs from the scratch filesystem to the work filesystem.
 
 Options:
 
