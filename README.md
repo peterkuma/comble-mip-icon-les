@@ -67,6 +67,7 @@ submission to COMBLE MIP:
 
 - `FixN_as0.68`: The **FixN** experiment. This sets the `alpha_spacefilling`
   parameter to 0.68 to reduce graupel formation.
+- `FixN_def_z0_as0.68`: The **FixN def_z0** experiment.
 - `FixN_noice`: The **FixN noice** experiment. The `alpha_spacefilling`
   parameter does not need to be set (no graupel).
 - `ProgNa_as0.68`: The **ProgNa** experiment.
@@ -292,8 +293,10 @@ are located on the **HOME** file system. The `runs` directory is located on
 **SCRATCH** under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A
 copy of runs which are not periodically deleted is located on the **WORK**
 filesystem under `/work/bb1311/peter/comble-mip/runs` (symlink from
-`runs_work`). For space reasons, the ICON code repositories under
-`src/ICON_DWD_NWP_DEPHY` are symlinks to the **WORK**k filesystem under
+`runs_work`). Runs can be synchronized from the scratch filesystem (directory
+`runs`) to the work filesystem (directory `runs_work`) with `./run sync_runs`.
+For space reasons, the ICON code repositories under `src/ICON_DWD_NWP_DEPHY` are
+symlinks to the **WORK** filesystem under
 `/work/bb1311/peter/comble-mip/src/ICON_DWD_NWP_DEPHY/`.
 
 ## Contact
