@@ -289,15 +289,20 @@ referenced above.
 
 Due practical differences between the Levante file systems, this repository is
 split across multiple filesystems. The main parts such as the code under `bin`
-are located on the **HOME** file system. The `runs` directory is located on
-**SCRATCH** under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A
-copy of runs which are not periodically deleted is located on the **WORK**
+are located on the home file system. The `runs` directory is located on
+scratch under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A
+copy of runs which are not periodically deleted is located on the work
 filesystem under `/work/bb1311/peter/comble-mip/runs` (symlink from
 `runs_work`). Runs can be synchronized from the scratch filesystem (directory
 `runs`) to the work filesystem (directory `runs_work`) with `./run sync_runs`.
 For space reasons, the ICON code repositories under `src/ICON_DWD_NWP_DEPHY` are
-symlinks to the **WORK** filesystem under
+symlinks to the work filesystem under
 `/work/bb1311/peter/comble-mip/src/ICON_DWD_NWP_DEPHY/`.
+
+## README
+
+This README document can be converted from Markdown to PDF with `./run
+build_readme`. This has to be run on a system where pandoc is installed.
 
 ## Contact
 

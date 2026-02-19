@@ -92,15 +92,20 @@ sync_runs)
     rsync -av runs/ runs_work/
     ;;
 
+build_readme)
+    pandoc -o README.pdf README.md -Vgeometry=a4paper,margin=2cm
+    ;;
+
 *)
     cat <<EOF
 Usage: $0 [-f] COMMAND
 
 Available commands:
 
-  plot_runs  Plot timeseries and curtain of all runs under runs.
-  plot_mip   Plot timeseries and curtain of all models under arm-comble-mip/les_output.
-  sync_runs  Synchronize runs from the scratch filesystem to the work filesystem.
+  build_readme  Build the README file. This has to be run on a system where pandoc is installed.
+  plot_runs     Plot timeseries and curtain of all runs under runs.
+  plot_mip      Plot timeseries and curtain of all models under arm-comble-mip/les_output.
+  sync_runs     Synchronize runs from the scratch filesystem to the work filesystem.
 
 Options:
 
