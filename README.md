@@ -41,7 +41,7 @@ It is recommended to install the packages inside a Python virtual environment:
 
 ```sh
 python3 -m venv venv # Create a virtual environment venv
-venv/bin/activate # Activate the session
+. venv/bin/activate # Activate the session
 pip3 install -r requirements.txt # Install packages
 # ...
 # Run any commands in this repository
