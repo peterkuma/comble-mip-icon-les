@@ -1,16 +1,13 @@
-# ICON COMBLE MIP
+# ICON LES contribution to the COMBLE-MIP project
 
-Author: [Peter Kuma](mailto:peter@peterkuma.net) based on code inherited from
-[Anna Possner](mailto:apossner@iau.uni-frankfurt.de).
+This repository contains code for the ICON LES contribution to the [COMBLE-MIP
+project](https://arm-development.github.io/comble-mip/). The contribution is
+evaluated in an upcoming paper 'The Cold-Air Outbreaks in the Marine Boundary
+Layer Experiment model-observation intercomparison project (COMBLE-MIP), Part I:
+Model specification, observational constraints, and preliminary findings' by
+Juliano *et* al. currently in review.
 
-## Overview
-
-This repository (`/home/b/b381672/prj/comble-mip`) contains files for running
-the [COMBLE MIP
-experiments](https://arm-development.github.io/comble-mip/README.html) with ICON
-LES.
-
-The following experiments are supported:
+The following COMBLE-MIP experiments are supported:
 
 - **FixN**
 - **FixN_def_z0**
@@ -18,52 +15,53 @@ The following experiments are supported:
 - **ProgNa** (alt) [see `ALT_PROGNA` in `bin/postproc_steps/dephy` for the
   description of the alt case]
 
-Some information about the ICON runs for the COMBLE MIP is in the poster
+Some information about the ICON runs for the COMBLE-MIP is in the poster
 "[Exploring sensitivity to ice nucleating particles and secondary ice production
 during COMBLE in idealised ICON large eddy
 simulations](https://zenodo.org/records/15174379)".
 
-## Anna's files
-
-Anna's original files for the COMBLE MIP experiment are under:
-
-- `/home/b/b380903/code/ICON_DWD_NWP_DEPHY_FixN/icon-nwp`: ICON code.
-- `/work/bb1358/possnera/COMBLE`: Run scripts, namelists, input files, and
-simulation output.
-- `/home/b/b380903/postproc/COMBLE`: Postprocessing.
-
-This repository inherits from the above, but the process is more consolidated,
-various fixes have been applied to the ICON source code (Section "ICON source
-code"), and 2D DEPHY output has been added. This repository largely inherits
-from and supersedes Anna's files, but there may be some useful parts that are
-under Anna's files but not here.
-
-## Code repository
-
-This directory is a Git repository, but not all of the files are committed to the
-Git history, because the remaining files are either too large or not suitable to
-be committed. Notably, scripts under `bin`, postprocessing code under `src`, and
-experiment configuration under `exp` are committed, while the model output under
-`runs` and `submission` is not, nor are ICON repositories under
-`src/ICON_DWD_NWP_DEPHY` and the COMBLE MIP repository under `arm-comble-mip`.
+For licensing reasons, the code for the ICON model cannot be made publicly
+available (code under `src` as described in this README). Interested users
+should contact the authors about access.
 
 ## Required software
 
-To run the scripts under `bin`, some Python packages are required:
+To run the scripts under `bin`, some Python packages are required (see
+`requirements.txt`). The code has only been tested on Linux. In addition, Python
+3, nco, cdo, and parallel are required. The code has been tested with the
+following versions:
 
-- [ds-format](https://ds-format.peterkuma.net)
-- [aquarius-time](https://github.com/peterkuma/aquarius-time/)
-- [rsool](https://github.com/peterkuma/rstool)
+- Red Hat Enterprise Linux 8.10
+- Python 3.10.10
+- nco 5.0.6
+- cdo 2.0.5
+- GNU parallel 20210922
 
-These can be installed from PyPI with `pip3 install ds-format aquarius-time
-rstool`.
+It is recommended to install the packages inside a Python virtual environment:
+
+```sh
+python3 -m venv venv # Create a virtual environment venv
+venv/bin/activate # Activate the session
+pip3 install -r requirements.txt # Install packages
+# ...
+# Run any commands in this repository
+# ...
+deactivate # Deactivate the session
+```
+
+## Running the code
+
+The code is made to be submitted to supercomputer nodes with SLURM. If needed,
+this can be adjusted in `bin/submit_les` and `bin/submit_postproc`. The code
+also loads modules with the `module` command. If this command is not available
+on your system, the code under `bin` needs to be adjusted.
 
 ## Experiment configuration
 
 The experiment configuration is in files under `exp`, one file per experiment.
 The common configuration (ICON namelists) for all experiments is in `bin/les`
 and `input/case_definition_dephy`. Only a few experiments were used for the
-submission to COMBLE MIP:
+submission to COMBLE-MIP:
 
 - `FixN_as0.68`: The **FixN** experiment. This sets the `alpha_spacefilling`
   parameter to 0.68 to reduce graupel formation.
@@ -78,26 +76,19 @@ inclusion of another configuration, such as `. exp/FixN`. The experiments marked
 as `small` are for the "small" grid `input/Torus_Triangles_10x10_100m.nc` (1 km
 domain), while the other ones are for the "large" grid
 `input/Torus_Triangles_182x182_141m.nc`. Note that the large grid is considered
-a small "toy" domain in the context of the COMBLE MIP manuscript.
+a small "toy" domain in the context of the COMBLE-MIP manuscript.
 
 ## ICON model input and output
 
-The model experiment run directories are stored in `runs` and under
-`runs_work`. The former is on the scratch partition and subject to old file
-removal policies on Levante but is faster for reading and writing data.
-`runs_work` is a copy of `runs` on the work partition (project bb1311) made with
-rsync. This is permanent (as long as the project exists) but slower. After
-changes in `runs`, rsync should be run in due time (within several weeks) to
-ensure that the output is preserved: `rsync -av runs/ runs_work/`.
-
-ICON is configured to output three NetCDF files: `mean.nc`, `hourly.nc`, and
-`inst.nc`. `mean.nc` is 10-min means, `hourly.nc` is hourly instantaneous, and
-`inst.nc` is 10-min instantaneous. The exact output configuration is in
-`bin/les`. Two ICON namelists, `icon_master.namelist` and `icon.namelist`,
-containing the run configuration, are created by `bin/les` in the experiment's
-run directory. Other ICON input files are symlinked in the run directory.
-Notably, the grids are located in `input/Torus_Triangles_`\*, and the LES
-forcing file is `input/COMBLE_INTERCOMPARISON_FORCING_V2.5.nc`. These are
+The ICON output is written to files under `run`*exp*, where *exp* is the
+experiment name. ICON is configured to output three NetCDF files: `mean.nc`,
+`hourly.nc`, and `inst.nc`. `mean.nc` is 10-min means, `hourly.nc` is hourly
+instantaneous, and `inst.nc` is 10-min instantaneous. The exact output
+configuration is in `bin/les`. Two ICON namelists, `icon_master.namelist` and
+`icon.namelist`, containing the run configuration, are created by `bin/les` in
+the experiment's run directory. Other ICON input files are symlinked in the run
+directory. Notably, the grids are located in `input/Torus_Triangles_`\*, and the
+LES forcing file is `input/COMBLE_INTERCOMPARISON_FORCING_V2.5.nc`. These are
 symlinked in the experiment's run directory as `grid.nc` and `init_SCM.nc`,
 respectively. The job's standard and error output are stored in `output`, and
 for the postprocessing job, in `postproc_output`.
@@ -106,18 +97,21 @@ for the postprocessing job, in `postproc_output`.
 
 The postprocessing involves calculation of optical depth by
 `bin/postproc_steps/optdepth` and conversion of the model output to the DEPHY
-format by `bin/postproc_steps/dephy`, as required by the COMBLE MIP. The optical
+format by `bin/postproc_steps/dephy`, as required by the COMBLE-MIP. The optical
 depth calculation creates files `opt_mean.nc` and `opt_inst.nc` in the
 experiment's run directory with optical depth calculated from the 10-min mean
 output and 10-min instantaneous output, respectively. The final DEPHY files are
 `dephy_mean.nc` and `dephy_2d.nc` for the "LES: Domain-Mean Variables" and "LES:
-Two-Dimensional Fields" COMBLE MIP output, respectively. The postprocessing
-steps also can be run interactively from the command line in an SSH session
-started with `salloc -A bb1311 -p interactive -t 8:00:00 --mem=8G` or similar.
+Two-Dimensional Fields" COMBLE-MIP output, respectively. If your SLURM
+configuration allows it, the postprocessing steps also can be run interactively
+from the command line in an SSH session started with `salloc -A `*account*` -p
+interactive -t 8:00:00 --mem=8G` or similar, where *account* is the SLURM
+account to run under.
 
 The Fortran postprocessing source code is located under `src/postproc`. It can
-be compiled with `make` (run in the same directory as the code) and requires
-the gcc module to be loaded with `module load gcc` beforehand.
+be compiled with `make` (run in the same directory as the code) and depending on
+your system configuration, it might require the gcc module to be loaded with
+`module load gcc` beforehand.
 
 The postprocessing steps `add_optdepth`, `add_optdepth_vsedi`, and `vsedi`
 are currently not applied by `bin/postproc`. The work done by `add_optdepth`
@@ -160,7 +154,7 @@ Some ancillary input files are stored under `input`:
 
 - `case_definition_dephy`: ICON configuration sourced by `bin/les`.
 - `COMBLE CAO LES-SCM Intercomparison Output Variables.xlsx`: Original variables
-  spreadsheet from COMBLE MIP.
+  spreadsheet from COMBLE-MIP.
 - `COMBLE_INTERCOMPARISON_FORCING_V2.5.nc`: ICON forcing, as defined by COMBLE
   MIP.
 - `comble_vars_2d.csv`: Definition of 2D DEPHY variables needed by
@@ -168,9 +162,72 @@ Some ancillary input files are stored under `input`:
 - `comble_vars_mean.csv`: Definition of mean DEPHY variables needed by
   `bin/postproc_steps/dephy`.
 - `Torus_Triangles_*.nc`: ICON grid definitions.
-- `track.nc`: Track of the COMBLE MIP cold air outbreak simulation.
+- `track.nc`: Track of the COMBLE-MIP cold air outbreak simulation.
 
-## ICON source code
+## Submission
+
+The `submission` directory contains the final ICON model output files as
+submitted to COMBLE-MIP. They are the same as the corresponding `dephy.nc` files
+under `runs`, except that they also contain modified metadata set with
+`bin/set_dephy_meta`. The current version of `bin/postproc_steps/dephy` now sets
+the metadata correctly, and `bin/set_dephy_meta` does not need to be applied.
+The files under `submission` have been committed to the [COMBLE-MIP GitHub
+repository](https://github.com/ARM-Development/comble-mip/).
+
+## Other stuff
+
+The `diff` directory contains some diff files for the ICON code. This is already
+incorporated in `src/ICON_DWD_NWP_DEPHY`.
+
+## Additional Levante-specific information
+
+Information in this section is only intended for those who have access to the
+Levante supercomputer, where also all of the ICON source code is located. This
+repository with the additional files is under `/home/b/b381672/prj/comble-mip`.
+
+The original files for the COMBLE-MIP experiment, prepared by Anna Possner, are
+available under:
+
+- `/home/b/b380903/code/ICON_DWD_NWP_DEPHY_FixN/icon-nwp`: ICON code.
+- `/work/bb1358/possnera/COMBLE`: Run scripts, namelists, input files, and
+simulation output.
+- `/home/b/b380903/postproc/COMBLE`: Postprocessing.
+
+This repository inherits from the above, but the process is more consolidated,
+various fixes have been applied to the ICON source code (Section "ICON source
+code"), and 2D DEPHY output has been added. This repository largely inherits
+from and supersedes Anna's files, but there may be some useful parts that are
+under Anna's files but not here.
+
+Not all of the files are committed to this git repository, because the remaining
+files are either too large or not suitable to be committed. Notably, scripts
+under `bin`, postprocessing code under `src`, and experiment configuration under
+`exp` are committed, while the model output under `runs` and `submission` is
+not, nor are ICON repositories under `src/ICON_DWD_NWP_DEPHY` and the COMBLE-MIP
+repository under `arm-comble-mip`.
+
+### File systems
+
+The model experiment run directories are stored in `runs` and under `runs_work`.
+The former is on the scratch partition and subject to old file removal policies
+on Levante but is faster for reading and writing data. `runs_work` is a copy of
+`runs` on the work partition (project bb1311) made with rsync. This is permanent
+(as long as the project exists) but slower. After changes in `runs`, rsync
+should be run in due time (within several weeks) to ensure that the output is
+preserved: `rsync -av runs/ runs_work/`.
+
+Due practical differences between the Levante file systems, this repository is
+split across multiple filesystems. The main parts such as the code under `bin`
+are located on the home file system. The `runs` directory is located on scratch
+under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A copy of runs
+which are not periodically deleted is located on the work filesystem under
+`/work/bb1311/peter/comble-mip/runs` (symlink from `runs_work`). Runs can be
+synchronized from the scratch filesystem (directory `runs`) to the work
+filesystem (directory `runs_work`) with `./run sync_runs`. For space reasons,
+the ICON code repositories under `src/ICON_DWD_NWP_DEPHY` are symlinks to the
+work filesystem under `/work/bb1311/peter/comble-mip/src/ICON_DWD_NWP_DEPHY/`.
+
+### ICON source code
 
 The ICON model source code is located under `src/ICON_DWD_NWP_DEPHY`. Each of
 the main experiments has its own branch in its own subdirectory. The directory
@@ -199,10 +256,10 @@ from each of the experiment ICON source code subdirectories.
   GitLab](icon-nwp-scm).
 - `ProgNa`: The ProgNa experiment. This is based on `baseline_fix_z0` and also
   sets initial aerosol parameters required for this experiment (commit a1d21a).
-  TODO: This needs some more attention before it complies with the COMBLE MIP
+  TODO: This needs some more attention before it complies with the COMBLE-MIP
   requirements for the experiment.
 - `ProgNaNi`: The same as above, but for the ProgNaNi experiment. TODO: This
-  needs some more attention before it complies with the COMBLE MIP requirements
+  needs some more attention before it complies with the COMBLE-MIP requirements
   for the experiment.
 
 The repositories above contain Git remote-tracking branches that they "inherit"
@@ -210,17 +267,22 @@ code from (these can be listed with `git branch`). The required commits were
 transferred with `git cherry-pick` from the remote-tracking branches. The bare
 repository contains all of the branches.
 
-## Submission
+### Miscellaneous
 
-The `submission` directory contains the final ICON model output files as
-submitted to COMBLE MIP. They are the same as the corresponding `dephy.nc` files
-under `runs`, except that they also contain modified metadata set with
-`bin/set_dephy_meta`. The current version of `bin/postproc_steps/dephy` now sets
-the metadata correctly, and `bin/set_dephy_meta` does not need to be applied. The
-files under `submission` have been committed to the [COMBLE MIP GitHub
-repository](https://github.com/ARM-Development/comble-mip/).
+`src/grid-generator` is a grid generator that can produce torus grids. This is
+not needed unless grids other than `input/Torus_Triangles_*.nc` are needed.
 
-## Secondary ice production
+The `arm-comble-mip` directory is the [COMBLE-MIP
+repository](https://github.com/arm-development/comble-mip/) as on GitHub.
+
+Some old code is located in `bin/_`, `bin/postproc_step/_`, and `src/_`. Use at
+your own peril.
+
+`runs_AP` is a symlink to the original runs performed by Anna, and `runs_AP_rw`
+are some additional files/plots produced for the former, mostly for testing
+purposes only.
+
+### Secondary ice production
 
 Merging of the SIP processes in the two-moment microphysics scheme is work in
 progress. The repository for SIP is in `src/ICON_DWD_NWP_DEPHY/SIP`. The SIP
@@ -229,11 +291,11 @@ MICRO](https://github.com/apossner/ICON_MICRO) repository developed by Anna and
 Kevin Pfannkuch. [Another version](https://github.com/peterkuma/ICON_MICRO) of
 the repository exists, which also includes the whole Git history of ICON as on
 the DKRZ GitLab. Both of these repositories are private and require an invite.
-Contact [Peter Kuma](mailto:peter@peterkuma.net) or Anna.
+Contact Peter Kuma or Anna Possner.
 
 The ICON MICRO repository uses an older version of ICON than ICON for the COMBLE
 MIP experiments. Therefore, the SIP-related changes in ICON MICRO need to be
-ported into the COMBLE MIP ICON version. The main files which need to be merged
+ported into the COMBLE-MIP ICON version. The main files which need to be merged
 are `src/atm_phy_schemes/mo_2mom_mcrph_main.f90` and
 `src/atm_phy_schemes/mo_2mom_mcrph_processes.f90`. The porting is already done
 for these two files, but not tested in any way, and not even checked if they
@@ -247,65 +309,32 @@ Because the indentation and whitespace has been changed in arbitrary ways in the
 ICON MICRO repository, it is not trivial to compare using diff. The above diffs
 show differences after indentation is normalised with `findent -i 2`.
 
-## TODO
-
-As of 23 Sep 2025, there is an ongoing discussion with [Gaurav
-Dogra](mailto:gaurav.dogra@ipsl.fr) and [Tomi
-Raatikainen](mailto:Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
-simulations for COMBLE MIP. They should be using their respective models for the
-simulation.
-
-Anna has wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
-experiments. The code is located in the ICON MICRO repository.
-
-The **ProgNa** and **ProgNaNi** may also need some additional work and checks
-before submitting to COMBLE MIP regarding how diagnostic and prognostic ice
-should be specified.
-
-## Other stuff
-
-`src/grid-generator` is a grid generator that can produce torus grids. This is
-not needed unless grids other than `input/Torus_Triangles_*.nc` are needed.
-
-The `diff` directory contains some diff files for the ICON code. This is already
-incorporated in `src/ICON_DWD_NWP_DEPHY`.
-
-The `arm-comble-mip` directory is the [COMBLE MIP
-repository](https://github.com/arm-development/comble-mip/) as on GitHub.
-
-Some old code is located in `bin/_`, `bin/postproc_step/_`, and `src/_`. Use at
-your own peril.
-
-`runs_AP` is a symlink to the original runs performed by Anna, and `runs_AP_rw`
-are some additional files/plots produced for the former, mostly for testing
-purposes only.
-
-The `plots` directory contains some old plots.
+The `plot` directory contains some old plots.
 
 The `map` directory contains code and data for plotting a map as in the poster
 referenced above.
 
-## File systems and symlinks
+## TODO
 
-Due practical differences between the Levante file systems, this repository is
-split across multiple filesystems. The main parts such as the code under `bin`
-are located on the home file system. The `runs` directory is located on
-scratch under `/scratch/b/b381672/comble-mip/runs` (symlink from `runs`). A
-copy of runs which are not periodically deleted is located on the work
-filesystem under `/work/bb1311/peter/comble-mip/runs` (symlink from
-`runs_work`). Runs can be synchronized from the scratch filesystem (directory
-`runs`) to the work filesystem (directory `runs_work`) with `./run sync_runs`.
-For space reasons, the ICON code repositories under `src/ICON_DWD_NWP_DEPHY` are
-symlinks to the work filesystem under
-`/work/bb1311/peter/comble-mip/src/ICON_DWD_NWP_DEPHY/`.
+As of 23 September 2025, there is an ongoing discussion with [Gaurav
+Dogra](mailto:gaurav.dogra@ipsl.fr) and [Tomi
+Raatikainen](mailto:Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
+simulations for COMBLE-MIP. They should be using their respective models for the
+simulation.
 
-## README
+Anna wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
+experiments. The code is located in the ICON MICRO repository.
+
+The **ProgNa** and **ProgNaNi** may also need some additional work and checks
+before submitting to COMBLE-MIP regarding how diagnostic and prognostic ice
+should be specified.
+
+## This README
 
 This README document can be converted from Markdown to PDF with `./run
 build_readme`. This has to be run on a system where pandoc is installed.
 
-## Contact
+## Authors and license
 
-For more information, you can contact either [Anna
-Possner](mailto:apossner@iau.uni-frankfurt.de) or [Peter
-Kuma](mailto:peter@peterkuma.net).
+The authors of the code are Anna Possner and Peter Kuma. The code is available
+under the terms of the MIT license (see `LICENSE.md` for details).
