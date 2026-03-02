@@ -196,8 +196,9 @@ simulation output.
 
 This repository inherits from the above, but the process is more consolidated,
 various fixes have been applied to the ICON source code, and 2D DEPHY output has
-been added. This repository largely inherits from and supersedes Anna's files,
-but there may be some useful parts that are under Anna's files but not here.
+been added. This repository largely inherits from and supersedes Anna Possner's
+files, but there may be some useful parts that are under Anna Possner's files
+but not here.
 
 Not all of the files are committed to this Git repository, because the remaining
 files are either too large or not suitable to be committed. Notably, scripts
@@ -278,20 +279,21 @@ repository](https://github.com/arm-development/comble-mip/) as on GitHub.
 Some old code is located in `bin/_`, `bin/postproc_step/_`, and `src/_`. Use at
 your own peril.
 
-`runs_AP` is a symlink to the original runs performed by Anna, and `runs_AP_rw`
-are some additional files/plots produced for the former, mostly for testing
-purposes only.
+`runs_AP` is a symlink to the original runs performed by Anna Possner, and
+`runs_AP_rw` are some additional files/plots produced for the former, mostly for
+testing purposes only.
 
 ### Secondary ice production
 
 Merging of the SIP processes in the two-moment microphysics scheme is work in
 progress. The repository for SIP is in `src/ICON_DWD_NWP_DEPHY/SIP`. The SIP
 experiments should be conducted with the SIP implementation as in the [ICON
-MICRO](https://github.com/apossner/ICON_MICRO) repository developed by Anna and
-Kevin Pfannkuch. [Another version](https://github.com/peterkuma/ICON_MICRO) of
-the repository exists, which also includes the whole Git history of ICON as on
-the DKRZ GitLab. Both of these repositories are private and require an invite.
-Contact Peter Kuma or Anna Possner.
+MICRO](https://github.com/apossner/ICON_MICRO) repository developed by Anna
+Possner and Kevin Pfannkuch. [Another
+version](https://github.com/peterkuma/ICON_MICRO) of the repository exists,
+which also includes the whole Git history of ICON as on the DKRZ GitLab. Both of
+these repositories are private and require an invite. Contact Peter Kuma or Anna
+Possner.
 
 The ICON MICRO repository uses an older version of ICON than ICON for the COMBLE
 MIP experiments. Therefore, the SIP-related changes in ICON MICRO need to be
@@ -316,14 +318,12 @@ referenced above.
 
 ## TODO
 
-As of 23 September 2025, there is an ongoing discussion with [Gaurav
-Dogra](mailto:gaurav.dogra@ipsl.fr) and [Tomi
-Raatikainen](mailto:Tomi.Raatikainen@fmi.fi) about collaboration regarding SIP
-simulations for COMBLE-MIP. They should be using their respective models for the
-simulation.
+As of 23 September 2025, there is an ongoing discussion with Gaurav Dogra and
+Tomi Raatikainen about collaboration regarding SIP simulations for COMBLE-MIP.
+They should be using their respective models for the simulation.
 
-Anna wanted to add the McCluskey scheme to the **ProgNa** and **ProgNaNi**
-experiments. The code is located in the ICON MICRO repository.
+Anna Possner wanted to add the McCluskey scheme to the **ProgNa** and
+**ProgNaNi** experiments. The code is located in the ICON MICRO repository.
 
 The **ProgNa** and **ProgNaNi** may also need some additional work and checks
 before submitting to COMBLE-MIP regarding how diagnostic and prognostic ice
