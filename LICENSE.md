@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Anna Possner and Peter Kuma
+Copyright (c) 2025, 2026 Anna Possner and Peter Kuma
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
