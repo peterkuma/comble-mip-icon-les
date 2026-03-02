@@ -73,10 +73,10 @@ submission to COMBLE-MIP:
 The experiment configuration files are shell scripts included by the `bin/les`
 script. The experiment configuration supports basic inheritance through the
 inclusion of another configuration, such as `. exp/FixN`. The experiments marked
-as `small` are for the "small" grid `input/Torus_Triangles_10x10_100m.nc` (1 km
-domain), while the other ones are for the "large" grid
+as `small` are for the “small” grid `input/Torus_Triangles_10x10_100m.nc` (1 km
+domain), while the other ones are for the “large” grid
 `input/Torus_Triangles_182x182_141m.nc`. Note that the large grid is considered
-a small "toy" domain in the context of the COMBLE-MIP manuscript.
+a small “toy” domain in the context of the COMBLE-MIP manuscript.
 
 ## ICON model input and output
 
@@ -101,8 +101,8 @@ format by `bin/postproc_steps/dephy`, as required by the COMBLE-MIP. The optical
 depth calculation creates files `opt_mean.nc` and `opt_inst.nc` in the
 experiment's run directory with optical depth calculated from the 10-min mean
 output and 10-min instantaneous output, respectively. The final DEPHY files are
-`dephy_mean.nc` and `dephy_2d.nc` for the "LES: Domain-Mean Variables" and "LES:
-Two-Dimensional Fields" COMBLE-MIP output, respectively. If your SLURM
+`dephy_mean.nc` and `dephy_2d.nc` for the “LES: Domain-Mean Variables” and “LES:
+Two-Dimensional Fields” COMBLE-MIP output, respectively. If your SLURM
 configuration allows it, the postprocessing steps also can be run interactively
 from the command line in an SSH session started with `salloc -A `*account*` -p
 interactive -t 8:00:00 --mem=8G` or similar, where *account* is the SLURM
@@ -140,7 +140,7 @@ with `./run plot_mip`. The following plotting scripts are available:
   ICON model output files (`mean.nc`, `hourly.nc`, or `inst.nc`). The fields
   plotted depend on the model output available in the file.
 
-- `plot_curtain`: Plot "curtain" (time vs. height) plots from the DEPHY mean
+- `plot_curtain`: Plot “curtain” (time vs. height) plots from the DEPHY mean
   files are `mean.nc`.
 
 - `plot_timeseries`: Plot time series plots from the DEPHY mean files or
@@ -195,10 +195,9 @@ simulation output.
 - `/home/b/b380903/postproc/COMBLE`: Postprocessing.
 
 This repository inherits from the above, but the process is more consolidated,
-various fixes have been applied to the ICON source code (Section "ICON source
-code"), and 2D DEPHY output has been added. This repository largely inherits
-from and supersedes Anna's files, but there may be some useful parts that are
-under Anna's files but not here.
+various fixes have been applied to the ICON source code, and 2D DEPHY output has
+been added. This repository largely inherits from and supersedes Anna's files,
+but there may be some useful parts that are under Anna's files but not here.
 
 Not all of the files are committed to this Git repository, because the remaining
 files are either too large or not suitable to be committed. Notably, scripts
@@ -236,7 +235,7 @@ the main experiments has its own branch in its own subdirectory. The directory
 is shared for all of them and can be pushed into with `git push origin` *branch*
 from each of the experiment ICON source code subdirectories.
 
-- `bare`: Git "bare" repository in which all of the branches for the experiments
+- `bare`: Git “bare” repository in which all of the branches for the experiments
   are stored by `git push` from the repositories listed below.
 - `baseline`: Baseline for all of the experiments. This inherits from the
   `icon-nwp-scm` branch of the [main ICON
@@ -263,7 +262,7 @@ from each of the experiment ICON source code subdirectories.
   needs some more attention before it complies with the COMBLE-MIP requirements
   for the experiment.
 
-The repositories above contain Git remote-tracking branches that they "inherit"
+The repositories above contain Git remote-tracking branches that they “inherit”
 code from (these can be listed with `git branch`). The required commits were
 transferred with `git cherry-pick` from the remote-tracking branches. The bare
 repository contains all of the branches.
@@ -300,7 +299,7 @@ ported into the COMBLE-MIP ICON version. The main files that need to be merged
 are `src/atm_phy_schemes/mo_2mom_mcrph_main.f90` and
 `src/atm_phy_schemes/mo_2mom_mcrph_processes.f90`. The porting is already done
 for these two files, but not tested in any way, and not even checked if they
-compile. The changes are marked with the comment "! ICON_MICRO:" and can also be
+compile. The changes are marked with the comment `! ICON_MICRO:` and can also be
 seen with `git diff` (or `git diff -w`) in the SIP repository. It is possible
 that other files will also require porting to make this work. Diffs for
 `mo_2mom_mcrph_main.f90` and `mo_2mom_mcrph_processes.f90` which show changes
