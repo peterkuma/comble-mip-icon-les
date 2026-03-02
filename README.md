@@ -2,9 +2,9 @@
 
 This repository contains code for the ICON LES contribution to the [COMBLE-MIP
 project](https://arm-development.github.io/comble-mip/). The contribution is
-evaluated in an upcoming paper 'The Cold-Air Outbreaks in the Marine Boundary
+evaluated in an upcoming paper, “The Cold-Air Outbreaks in the Marine Boundary
 Layer Experiment model-observation intercomparison project (COMBLE-MIP), Part I:
-Model specification, observational constraints, and preliminary findings' by
+Model specification, observational constraints, and preliminary findings” by
 Juliano *et* al. currently in review.
 
 The following COMBLE-MIP experiments are supported:
@@ -16,9 +16,9 @@ The following COMBLE-MIP experiments are supported:
   description of the alt case]
 
 Some information about the ICON runs for the COMBLE-MIP is in the poster
-"[Exploring sensitivity to ice nucleating particles and secondary ice production
+“[Exploring sensitivity to ice nucleating particles and secondary ice production
 during COMBLE in idealised ICON large eddy
-simulations](https://zenodo.org/records/15174379)".
+simulations](https://zenodo.org/records/15174379)”.
 
 For licensing reasons, the code for the ICON model cannot be made publicly
 available (code under `src` as described in this README). Interested users
@@ -109,9 +109,10 @@ interactive -t 8:00:00 --mem=8G` or similar, where *account* is the SLURM
 account to run under.
 
 The Fortran postprocessing source code is located under `src/postproc`. It can
-be compiled with `make` (run in the same directory as the code) and depending on
-your system configuration, it might require the gcc module to be loaded with
-`module load gcc` beforehand.
+be compiled with `make` (run in the same directory as the code), and depending
+on your system configuration, it might require the gcc module to be loaded with
+`module load gcc` beforehand. The compiler options in `Makefile` might need to
+be adjusted for your system.
 
 The postprocessing steps `add_optdepth`, `add_optdepth_vsedi`, and `vsedi`
 are currently not applied by `bin/postproc`. The work done by `add_optdepth`
@@ -199,7 +200,7 @@ code"), and 2D DEPHY output has been added. This repository largely inherits
 from and supersedes Anna's files, but there may be some useful parts that are
 under Anna's files but not here.
 
-Not all of the files are committed to this git repository, because the remaining
+Not all of the files are committed to this Git repository, because the remaining
 files are either too large or not suitable to be committed. Notably, scripts
 under `bin`, postprocessing code under `src`, and experiment configuration under
 `exp` are committed, while the model output under `runs` and `submission` is
@@ -295,19 +296,19 @@ Contact Peter Kuma or Anna Possner.
 
 The ICON MICRO repository uses an older version of ICON than ICON for the COMBLE
 MIP experiments. Therefore, the SIP-related changes in ICON MICRO need to be
-ported into the COMBLE-MIP ICON version. The main files which need to be merged
+ported into the COMBLE-MIP ICON version. The main files that need to be merged
 are `src/atm_phy_schemes/mo_2mom_mcrph_main.f90` and
 `src/atm_phy_schemes/mo_2mom_mcrph_processes.f90`. The porting is already done
 for these two files, but not tested in any way, and not even checked if they
-compile. The changes are marked with the comment "! ICON_MICRO:", and can also
-be seen with `git diff` (or `git diff -w`) in the SIP repository. It is possible
+compile. The changes are marked with the comment "! ICON_MICRO:" and can also be
+seen with `git diff` (or `git diff -w`) in the SIP repository. It is possible
 that other files will also require porting to make this work. Diffs for
 `mo_2mom_mcrph_main.f90` and `mo_2mom_mcrph_processes.f90` which show changes
-done in ICON MICRO compared to its ICON baseline version are in the files
+done in ICON MICRO compared to its ICON baseline version, are in the files
 `mo_2mom_mcrph_main.diff` and `mo_2mom_mcrph_processes.diff` under `SIP`.
-Because the indentation and whitespace has been changed in arbitrary ways in the
-ICON MICRO repository, it is not trivial to compare using diff. The above diffs
-show differences after indentation is normalised with `findent -i 2`.
+Because the indentation and whitespace have been changed in arbitrary ways in
+the ICON MICRO repository, it is not trivial to compare using diff. The above
+diffs show differences after indentation is normalized with `findent -i 2`.
 
 The `plot` directory contains some old plots.
 
