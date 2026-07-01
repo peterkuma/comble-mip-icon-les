@@ -143,6 +143,23 @@ with `./run plot_mip`. The following plotting scripts are available:
 - `plot_curtain`: Plot “curtain” (time vs. height) plots from the DEPHY mean
   files are `mean.nc`.
 
+- `plot_panel_curtain`: Plot "curtain" panel plots from DEPHY mean files.
+  Specifically adjusted to plot a combination of DHARMA and CM1-P3. To be run
+  with:
+
+  ```sh
+  modelpath=arm-comble-mip/output_les
+  bin/plot_curtain \
+    "$modelpath/dharma/sandbox/DHARMA_Lx25_dx100_FixN_noice.nc" \
+    "$modelpath/dharma/sandbox/DHARMA_Lx25_dx100_FixN.nc" \
+    "$modelpath/cm1-p3/sandbox/CM1-P3_Lx25_dx100_FixN_noice.nc" \
+    "$modelpath/cm1-p3/sandbox/CM1-P3_Lx25_dx100_FixN.nc" \
+    plot/curtain_panel.pdf
+  ```
+
+  where `arm-comble-mip` is the
+  [COMBLE-MIP repository](https://github.com/arm-development/comble-mip/).
+
 - `plot_timeseries`: Plot time series plots from the DEPHY mean files or
   `mean.nc`.
 

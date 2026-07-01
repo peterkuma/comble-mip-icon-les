@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""Plot a curtain plot comparing two simulations, showing relative humidity (RH), potential temperature (theta), longwave heating rate, and microphysics heating rate.
+
+Usage: bin/plot_curtain INPUT1 INPUT2 INPUT3 INPUT4 OUTPUT
+
+Arguments:
+
+  INPUT1  Input file for simulation 1, for RH, theta, and LW heating rate.
+  INPUT2  Input file for simulation 2, for RH, theta, and LW heating rate.
+  INPUT3  Input file for simulation 1, for microphysics heating rate.
+  INPUT4  Input file for simulation 2, for microphysics heating rate.
+"""
+
+import string
+import sys
+from re import L
+from string import ascii_lowercase
+
+import aquarius_time as aq
+import ds_format as ds
+import matplotlib as mpl
+import matplotlib.dates as mdates
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
+from rstool.algorithms import calc_pc, calc_tapar, calc_w, calc_z
+
+VARS = [
+    "ql",
+    "qi",
+    "hur",
+    "theta",
+    "dth_rad",
+    "dth_micro",
+]
+
+VAR_SYM = {
+    "ql": False,
+    "qi": False,
+    "hur": False,
+    "theta": False,
+    "dth_rad": True,
+    "dth_micro": True,
+}
+
+NROWS = len(VARS)
+NCOLS = 3
+
+VAR_TITLE = {
+    "ql": "Liquid mixing ratio",
+    "qi": "Ice mixing ratio",
+    "hur": "Relative humidity",
+    "theta": "Potential temp.",
+    "dth_rad": "Temp. trend LW",
+    "dth_micro": "Temp. trend micro.",
+}
+
+VAR_LABEL = {
+    "ql": r"q$_l$",
+    "qi": r"q$_i$",
+    "hur": "RH",
+    "theta": r"$\theta$",
+    "dth_rad": r"(dT/dt)$_\mathrm{LW}$",
+    "dth_micro": r"(dT/dt)$_\mathrm{micro}$",
+}
+
+VAR_UNITS = {
+    "ql": r"mg kg$^{-1}$",
+    "qi": r"mg kg$^{-1}$",
+    "hur": "%",
+    "theta": "°C",
+    "dth_rad": r"K h$^{-1}$",
+    "dth_micro": r"K h$^{-1}$",
+}
+
+mpl.rc("font", family="Open Sans")
+mpl.rc("axes", linewidth=0.4)
+mpl.rc("axes", grid=True)
+mpl.rc("axes.grid", axis="both")
+mpl.rc("lines", linewidth=1.2)
+mpl.rc("xtick.major", width=0.4)
+mpl.rc("ytick.major", width=0.4)
+mpl.rc("xtick.major", size=5)
+mpl.rc("ytick.major", size=5)
+mpl.rc("ytick.minor", visible=True)
+mpl.rc("xtick.minor", width=0.2)
+mpl.rc("ytick.minor", width=0.2)
+mpl.rc("xtick.minor", size=2.5)
+mpl.rc("ytick.minor", size=2.5)
+mpl.rc("legend", framealpha=1)
+mpl.rc("legend", facecolor="none")
+mpl.rc("legend", edgecolor="none")
+mpl.rc("legend", fancybox=False)
+mpl.rc("legend", fontsize=9)
+mpl.rc("grid", color="k")
+mpl.rc("grid", alpha=0.5)
+mpl.rc("grid", lw=0.1)
+mpl.rc("hatch", linewidth=0.05)
+mpl.rc("hatch", color="#000000a0")
+
+
+def tvar(var, x):
+    x = x.filled(np.nan)
+    if var in ["ql", "qi"]:
+        return x * 1e6
+    elif var == "hur":
+        return x * 100
+    elif var == "theta":
+        return x - 273.15
+    elif var in ["dth_rad", "dth_micro"]:
+        return x * 60 * 60
+    else:
+        return x
+
+
+def get_bounds(xx, sym=False):
+    if sym:
+        limit = np.max(np.abs(xx))
+        vlim = [-limit, limit]
+    else:
+        low, high = np.nanpercentile(xx, [1, 99])
+        vlim = [low, high]
+    locator = mpl.ticker.MaxNLocator(nbins=6, steps=[1, 2, 2.5, 5, 10])
+    bounds = locator.tick_values(vlim[0], vlim[1])
+    return bounds
+
+
+def plot_panel(
+    gs,
+    var,
+    x,
+    zc=None,
+    zeq=None,
+    bounds=None,
+    cmap=None,
+    with_xlabel=True,
+    with_ylabel=True,
+    label=None,
+):
+    plt.subplot(gs)
+    z = d1["zf"]
+    time = d1["time"]
+    time_dt = aq.to_datetime(time)
+
+    extent = [time_dt[0], time_dt[-1], z[0] * 1e-3, z[-1] * 1e-3]
+
+    plt.imshow(
+        x.T,
+        origin="lower",
+        extent=extent,
+        cmap=cmap,
+        vmin=(bounds[0] if bounds is not None else None),
+        vmax=(bounds[-1] if bounds is not None else None),
+    )
+
+    color = "w" if cmap == "viridis" else "k"
+    if zc is not None:
+        plt.plot(time_dt, zc * 1e-3, color=color, lw=0.5)
+
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%H"))
+    locator = mdates.AutoDateLocator(maxticks=12)
+    plt.yticks(np.arange(0, 8, 1))
+    plt.gca().xaxis.set_major_locator(locator)
+    plt.gca().set_aspect("auto")
+    if cmap == "viridis":
+        plt.gca().grid(color="white")
+
+    if with_xlabel:
+        plt.xlabel("Time [h]")
+    if with_ylabel:
+        plt.ylabel("Height [km]")
+        plt.text(
+            -0.22,
+            0.5,
+            VAR_TITLE[var],
+            rotation=90,
+            transform=plt.gca().transAxes,
+            va="center",
+            ha="center",
+            fontweight="bold",
+            fontsize=11,
+        )
+    if label is not None:
+        letter = string.ascii_lowercase[j]
+        color = "w" if cmap == "viridis" else "k"
+        if letter in ["j", "k"]:
+            color = "k"
+        plt.text(
+            0.01,
+            0.98,
+            "(%s)" % letter,
+            transform=plt.gca().transAxes,
+            ha="left",
+            va="top",
+            color=color,
+            fontweight="bold",
+        )
+
+
+def plot_colorbar(gs, bounds, cmap, label=None):
+    ax = plt.subplot(gs)
+    norm = mpl.colors.Normalize(vmin=bounds[0], vmax=bounds[-1])
+    cb = plt.gcf().colorbar(
+        mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
+        cax=ax,
+        orientation="vertical",
+        extend="both",
+    )
+    cb.set_label(label)
+    cb.ax.set_yticks(bounds)
+
+
+def calc_zeq(*, tpar, ta, z):
+    mask = tpar >= ta
+    i = np.argmax(~mask)
+    return z[i]
+
+
+def read(filename):
+    d = ds.read(filename, jd=True)
+    if "qlc" in d and "qlr" in d:
+        d["ql"] = d["qlc"] + d["qlr"]
+    if "qic" in d and "qig" in d and "qis" in d:
+        d["qi"] = d["qic"] + d["qig"] + d["qis"]
+    if "qi" not in d or np.all(d["qi"].mask):
+        d["qi"] = d["qlc"] * 0
+
+    n = len(d["time"])
+    hus = d["qv"][:, 0]
+    ps = d["pa"][:, 0]
+    tas = d["ta"][:, 0]
+    pa = d["pa"]
+    z = d["zf"]
+    ta = d["ta"]
+    ws = calc_w(hus=hus)
+    pc = calc_pc(ps=ps, ws=ws, tas=tas)
+    d["zc"] = np.array([calc_z(p1=pc[i], p=pa[i], z=z) for i in range(n)])
+
+    return d
+
+
+def get_cmap(var, sym=False):
+    return "seismic" if sym or VAR_SYM[var] else "viridis"
+
+
+def plot_sim_label(label, pos1, pos2):
+    plt.text(
+        0.05,
+        0.5 * (pos1 + pos2),
+        label,
+        transform=plt.gcf().transFigure,
+        rotation=90,
+        fontsize=13,
+        va="center",
+        ha="center",
+    )
+    r = patches.Rectangle(
+        (0.05 - 0.025 * 0.5, pos1),
+        0.025,
+        pos2 - pos1,
+        transform=plt.gcf().transFigure,
+        facecolor="k",
+        edgecolor="none",
+        alpha=0.1,
+    )
+    plt.gcf().patches.append(r)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 6:
+        sys.stderr.write(sys.modules[__name__].__doc__)
+        sys.exit(1)
+    input1 = sys.argv[1]
+    input2 = sys.argv[2]
+    input3 = sys.argv[3]
+    input4 = sys.argv[4]
+    output = sys.argv[5]
+
+    d1 = read(input1)
+    d2 = read(input2)
+    d3 = read(input3)
+    d4 = read(input4)
+
+    plt.figure(figsize=(13, 13))
+    gs = GridSpec(
+        NROWS,
+        NCOLS + 3,
+        wspace=0.2,
+        width_ratios=[1, 1, 0.045, 0.1, 1, 0.045],
+    )
+
+    xx = []
+    zc = []
+    for i, var in enumerate(VARS):
+        if var == "dth_micro":
+            da, db = d3, d4
+        else:
+            da, db = d1, d2
+        xx += [
+            [
+                tvar(var, da[var]),
+                tvar(var, db[var]),
+                tvar(var, da[var]) - tvar(var, db[var]),
+            ]
+        ]
+        zc += [
+            [
+                da["zc"],
+                db["zc"],
+                da["zc"] * np.nan,
+            ]
+        ]
+    xx = np.array(xx)
+    zc = np.array(zc)
+
+    bounds_q1 = get_bounds(xx[0:1, 0:2])
+    bounds_q2 = get_bounds(xx[0:1, 2], True)
+
+    bounds_dth1 = get_bounds(xx[-2:-1, 0:2], True)
+    bounds_dth2 = get_bounds(xx[-2:-1, 2], True)
+
+    j = 0
+    for i, var in enumerate(VARS):
+        k = i * (NCOLS + 3)
+        last = i == len(VARS) - 1
+        cmap1 = get_cmap(var)
+        cmap2 = get_cmap(var, True)
+        if var in ["dth_rad", "dth_micro"]:
+            bounds1, bounds2 = bounds_dth1, bounds_dth2
+        elif var in ["ql", "qi"]:
+            bounds1, bounds2 = bounds_q1, bounds_q2
+        else:
+            bounds1 = get_bounds(xx[i, 0:2])
+            bounds2 = get_bounds(xx[i, 2], True)
+        plot_panel(
+            gs[k],
+            var,
+            xx[i, 0],
+            zc=zc[i, 0],
+            bounds=bounds1,
+            cmap=cmap1,
+            with_xlabel=last,
+            with_ylabel=True,
+            label=j,
+        )
+        j += 1
+        if i == 0:
+            plt.title("Liquid-only", fontsize=11, fontweight="bold")
+        plot_panel(
+            gs[k + 1],
+            var,
+            xx[i, 1],
+            zc=zc[i, 1],
+            bounds=bounds1,
+            cmap=cmap1,
+            with_xlabel=last,
+            with_ylabel=False,
+            label=j,
+        )
+        j += 1
+        if i == 0:
+            plt.title("Mixed-phase", fontsize=11, fontweight="bold")
+        plot_panel(
+            gs[k + 4],
+            var,
+            xx[i, 2],
+            bounds=bounds2,
+            cmap=cmap2,
+            with_xlabel=last,
+            with_ylabel=False,
+            label=j,
+        )
+        j += 1
+        if i == 0:
+            plt.title(
+                "Liquid-only − Mixed-phase",
+                fontsize=11,
+                fontweight="bold",
+            )
+        plot_colorbar(
+            gs[k + 2],
+            bounds1,
+            cmap1,
+            label="%s [%s]" % (VAR_LABEL[var], VAR_UNITS[var]),
+        )
+        plot_colorbar(
+            gs[k + 5],
+            bounds2,
+            cmap2,
+            label=("Difference [%s]" % VAR_UNITS[var]),
+        )
+        pos = plt.gca().get_position()
+        if i == 0:
+            pos2 = pos.y1
+        if i == 4:
+            pos1 = pos.y0
+        if i == 5:
+            pos3 = pos.y0
+            pos4 = pos.y1
+
+    plot_sim_label("DHARMA", pos1, pos2)
+    plot_sim_label("CM1-P3", pos3, pos4)
+
+    plt.savefig(output, bbox_inches="tight")
