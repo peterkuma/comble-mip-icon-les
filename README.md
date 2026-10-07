@@ -2,10 +2,10 @@
 
 This repository contains code for the ICON LES contribution to the [COMBLE-MIP
 project](https://arm-development.github.io/comble-mip/). The contribution is
-evaluated in an upcoming paper, “The Cold-Air Outbreaks in the Marine Boundary
-Layer Experiment model-observation intercomparison project (COMBLE-MIP), Part I:
-Model specification, observational constraints, and preliminary findings” by
-Juliano *et* al. currently in review.
+evaluated in the paper [The Cold-Air Outbreaks in the Marine Boundary Layer
+Experiment model-observation intercomparison project (COMBLE-MIP) – Part 1:
+Model specification, observational constraints, and preliminary
+findings](https://doi.org/10.5194/acp-26-13267-2026) by Juliano *et al.*
 
 The following COMBLE-MIP experiments are supported:
 
